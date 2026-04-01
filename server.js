@@ -121,7 +121,8 @@ const allowedCorsOrigins = new Set([
     'http://127.0.0.1:5173',
     'http://192.168.68.105:3000',
     'https://handmade-suggest-troops-handmade.trycloudflare.com',
-    'https://domeniul-tau.com',
+    'https://event-smart-assistant.com',
+    'https://www.event-smart-assistant.com',
 ].map(normalizeOrigin));
 
 // Suportă un singur URL sau listă separată prin virgulă în CLIENT_URL
