@@ -139,7 +139,7 @@ const renderEmailLayout = ({
   theme = "slate",
 }) => {
   const t = EMAIL_THEMES[theme] || EMAIL_THEMES.slate;
-  const safeApp = escapeHtml(appName || "WeddingPro");
+  const safeApp = escapeHtml(appName || "Event Smart Assistant");
   const safeHeaderLabel = escapeHtml(headerLabel);
   const safeTitle = escapeHtml(title);
   const safeIntro = escapeHtml(intro);
@@ -214,8 +214,8 @@ const renderInfoCard = (rows = [], theme = "slate") => {
 
 export function createEmailNotifications({
   apiKey = "",
-  from = "WeddingPro <onboarding@resend.dev>",
-  appName = "WeddingPro",
+  from = "Event Smart Assistant <support@event-smart-assistant.com>",
+  appName = "Event Smart Assistant",
   clientUrl = "",
   logger = console,
 }) {
