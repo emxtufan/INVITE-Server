@@ -1,4 +1,4 @@
-﻿import dotenv from 'dotenv';
+import dotenv from 'dotenv';
 dotenv.config();
 
 import express from 'express';
@@ -37,7 +37,7 @@ const MONGO_URI = process.env.MONGO_URI || '';
 const JWT_SECRET = process.env.JWT_SECRET || 'secret-cheie-securizata-schimba-in-prod'; 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || ''; 
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || ''; 
-const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3005';
+const CLIENT_URL = process.env.CLIENT_URL || 'https://api.event-smart-assistant.com';
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const RESEND_FROM = process.env.RESEND_FROM || 'ESA Notify <support@event-smart-assistant.com>';
 const EMAIL_OTP_TTL_MINUTES = Number(process.env.EMAIL_OTP_TTL_MINUTES || 10);
@@ -125,7 +125,7 @@ const allowedCorsOrigins = new Set([
     'https://www.event-smart-assistant.com',
 ].map(normalizeOrigin));
 
-// SuportÄƒ un singur URL sau listÄƒ separatÄƒ prin virgulÄƒ Ã®n CLIENT_URL
+// Suportă un singur URL sau listă separată prin virgulă în CLIENT_URL
 if (process.env.CLIENT_URL) {
     String(process.env.CLIENT_URL)
         .split(',')
@@ -185,11 +185,12 @@ const SystemConfigSchema = new mongoose.Schema({
         oldPrice: { type: Number, default: 10000 },
         currency: { type: String, default: 'ron' }
     },
-    servicesComingSoon: { type: Boolean, default: false }
+    servicesComingSoon: { type: Boolean, default: false },
+    templateVisibility: { type: Object, default: {} }
 });
 
 
-// â”€â”€ Template Defaults â€” setari globale per template (admin) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Template Defaults — setari globale per template (admin) ──────────────
 const TemplateDefaultsSchema = new mongoose.Schema({
     templateId: { type: String, required: true, unique: true },
     colorTheme:             { type: String, default: 'default' },
@@ -397,12 +398,12 @@ const UserSchema = new mongoose.Schema({
     showTimeline: { type: Boolean, default: true },
     showGodparents: { type: Boolean, default: true },
     showParents: { type: Boolean, default: true },
-    // CÃ¢mpuri noi pentru invitaÈ›ie
+    // Câmpuri noi pentru invitație
     showCountdown: { type: Boolean, default: true },
     showRsvpButton: { type: Boolean, default: true },
     rsvpButtonText: { type: String, default: '' },
     customSections: { type: String, default: '[]' },
-    // â”€â”€ Hero styling â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Hero styling ──────────────────────────────────────────────────────
     heroFontFamily:    String,
     heroNameSize:      Number,
     heroDateSize:      Number,
@@ -411,7 +412,7 @@ const UserSchema = new mongoose.Schema({
     heroBgColor:       String,
     heroLetterSpacing: Number,
     heroLineHeight:    Number,
-    // â”€â”€ CastleMagic intro â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── CastleMagic intro ─────────────────────────────────────────────────
     heroBgImage:         String,
     heroBgImageMobile:   String,
     castleIntroSubtitle: String,
@@ -424,7 +425,7 @@ const UserSchema = new mongoose.Schema({
     castleInviteMiddle:  String,
     castleInviteBottom:  String,
     castleInviteTag:     String,
-    // â”€â”€ Camp-uri salvate cu strict:false â€” trebuie declarate explicit â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Camp-uri salvate cu strict:false — trebuie declarate explicit ────────
     heroContentImage:       String,
     heroContentImageMobile: String,
     colorTheme:             String,
@@ -487,7 +488,7 @@ const InvitationTemplateSchema = new mongoose.Schema({
 
 const InvitationTemplate = mongoose.model('InvitationTemplate', InvitationTemplateSchema);
 
-// â”€â”€ Marketplace Service Schema â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Marketplace Service Schema ────────────────────────────────────────────────
 const ServiceSchema = new mongoose.Schema({
     name:        { type: String, required: true },
     category:    { type: String, required: true, default: 'altele' },
@@ -509,7 +510,7 @@ const ServiceSchema = new mongoose.Schema({
     createdAt:   { type: Date, default: Date.now },
 });
 const Service = mongoose.model('Service', ServiceSchema);
-// â”€â”€ Service Requests Schema â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Service Requests Schema ───────────────────────────────────────────────────
 const ServiceRequestSchema = new mongoose.Schema({
   serviceId:       { type: String, required: true },
   serviceName:     { type: String, required: true },
@@ -518,7 +519,7 @@ const ServiceRequestSchema = new mongoose.Schema({
   email:           { type: String, required: true },
   phone:           { type: String, required: true },
   address:         { type: String, default: '' },
-  contactTime:     { type: String, default: 'OricÃ¢nd' },
+  contactTime:     { type: String, default: 'Oricând' },
   budget:          { type: String, default: '' },
   gdprAccepted:    { type: Boolean, default: false },
   callApproved:    { type: Boolean, default: false },
@@ -606,9 +607,28 @@ const getConfig = async () => {
             config.pricing.basicPrice = 1900;
             changed = true;
         }
+        if (!config.templateVisibility || typeof config.templateVisibility !== 'object' || Array.isArray(config.templateVisibility)) {
+            config.templateVisibility = {};
+            changed = true;
+        }
         if (changed) await config.save();
     }
     return config;
+};
+
+const normalizeTemplateStatus = (value) => (
+    value === 'coming_soon' ? 'coming_soon' : 'live'
+);
+
+const normalizeTemplateVisibilityMap = (input) => {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) return {};
+    const normalized = {};
+    for (const [rawTemplateId, rawStatus] of Object.entries(input)) {
+        const templateId = String(rawTemplateId || '').trim();
+        if (!templateId) continue;
+        normalized[templateId] = normalizeTemplateStatus(rawStatus);
+    }
+    return normalized;
 };
 
 // --- HELPER: CHECK IF EVENT IS COMPLETED (24 HOURS AFTER) ---
@@ -664,7 +684,7 @@ const ensureActiveEvent = async (req, res, next) => {
         if (isEventCompleted(user.profile.weddingDate)) {
             return res.status(403).send({ 
                 error: 'Event Finished', 
-                message: 'Acest eveniment a expirat (Offline). ArhiveazÄƒ-l pentru a Ã®ncepe unul nou.' 
+                message: 'Acest eveniment a expirat (Offline). Arhivează-l pentru a începe unul nou.' 
             });
         }
         next();
@@ -1023,7 +1043,7 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, STRIPE_WEBHOOK_SECRET);
   } catch (err) {
-    console.error(`âŒ Webhook Signature Error: ${err.message}`);
+    console.error(`❌ Webhook Signature Error: ${err.message}`);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
@@ -1069,7 +1089,7 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
                 invoicePdfUrl = invoice.invoice_pdf;
                 hostedInvoiceUrl = invoice.hosted_invoice_url;
             } catch (invErr) {
-                console.error("âš ï¸ Failed to retrieve invoice details:", invErr.message);
+                console.error("⚠️ Failed to retrieve invoice details:", invErr.message);
             }
         }
 
@@ -1363,7 +1383,7 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
           });
         }
     } catch (dbError) {
-        console.error('âŒ Database Update Failed:', dbError);
+        console.error('❌ Database Update Failed:', dbError);
         logStripeSmartbill('DB update error', {
           message: dbError.message,
           stack: dbError.stack,
@@ -1388,12 +1408,12 @@ const limiter = rateLimit({
 });
 // app.use('/api/', limiter);
 
-// â”€â”€â”€ Default wedding blocks â€” used on setup AND when customSections is empty â”€â”€
+// ─── Default wedding blocks — used on setup AND when customSections is empty ──
 const WEDDING_DEFAULT_BLOCKS = JSON.stringify([
 
-                // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-                // FOTO 1 â€” Cuplu hero (arc + fade jos) â€” ca Ã®n preview
-                // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+                // ════════════════════════════════════════════════════════
+                // FOTO 1 — Cuplu hero (arc + fade jos) — ca în preview
+                // ════════════════════════════════════════════════════════
                 {
                     id: "block-photo-1",
                     type: "photo",
@@ -1405,51 +1425,51 @@ const WEDDING_DEFAULT_BLOCKS = JSON.stringify([
                     photoMasks: ["fade-b"]
                 },
 
-                // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+                // ════════════════════════════════════════════════════════
                 // CITAT
-                // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+                // ════════════════════════════════════════════════════════
                 {
                     id: "block-quote-1",
                     type: "quote",
                     show: true,
-                    content: "Dragostea noastrÄƒ s-a nÄƒscut Ã®n Dios, creÈ™te Ã®n Cristos È™i va rÄƒmÃ¢ne prin harul SÄƒu.",
+                    content: "Dragostea noastră s-a născut în Dios, crește în Cristos și va rămâne prin harul Său.",
                     label: "1 Corinteni 13:4"
                 },
 
-                // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+                // ════════════════════════════════════════════════════════
                 // MUZICÄ‚
-                // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+                // ════════════════════════════════════════════════════════
                 {
                     id: "block-music-1",
                     type: "music",
                     show: true,
-                    musicTitle: "CÃ¢ntecul nostru",
+                    musicTitle: "Cântecul nostru",
                     musicArtist: "Artist",
                     musicUrl: "",
                     musicType: "none"
                 },
 
-                // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-                // COUNTDOWN â€” dark section
-                // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+                // ════════════════════════════════════════════════════════
+                // COUNTDOWN — dark section
+                // ════════════════════════════════════════════════════════
                 {
                     id: "block-countdown-1",
                     type: "countdown",
                     show: true
                 },
 
-                // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+                // ════════════════════════════════════════════════════════
                 // CALENDAR
-                // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+                // ════════════════════════════════════════════════════════
                 {
                     id: "block-calendar-1",
                     type: "calendar",
                     show: true
                 },
 
-                // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-                // FOTO 2 â€” Landscape romantic
-                // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+                // ════════════════════════════════════════════════════════
+                // FOTO 2 — Landscape romantic
+                // ════════════════════════════════════════════════════════
                 {
                     id: "block-photo-2",
                     type: "photo",
@@ -1461,9 +1481,9 @@ const WEDDING_DEFAULT_BLOCKS = JSON.stringify([
                     photoMasks: []
                 },
 
-                // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-                // FOTO 3 â€” Portret vertical
-                // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+                // ════════════════════════════════════════════════════════
+                // FOTO 3 — Portret vertical
+                // ════════════════════════════════════════════════════════
                 {
                     id: "block-photo-3",
                     type: "photo",
@@ -1475,9 +1495,9 @@ const WEDDING_DEFAULT_BLOCKS = JSON.stringify([
                     photoMasks: []
                 },
 
-                // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+                // ════════════════════════════════════════════════════════
                 // PÄ‚RINÈšI
-                // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+                // ════════════════════════════════════════════════════════
                 {
                     id: "block-parents-1",
                     type: "parents",
@@ -1486,9 +1506,9 @@ const WEDDING_DEFAULT_BLOCKS = JSON.stringify([
                     content: "Cu drag È™i recunoÈ™tinÈ›Äƒ, alÄƒturi de pÄƒrinÈ›ii noÈ™tri:"
                 },
 
-                // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+                // ════════════════════════════════════════════════════════
                 // NAÈ˜I
-                // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+                // ════════════════════════════════════════════════════════
                 {
                     id: "block-godparents-1",
                     type: "godparents",
@@ -1497,9 +1517,9 @@ const WEDDING_DEFAULT_BLOCKS = JSON.stringify([
                     content: "AlÄƒturi de naÈ™ii noÈ™tri, care ne-au cÄƒlÄƒuzit paÈ™ii:"
                 },
 
-                // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+                // ════════════════════════════════════════════════════════
                 // LOCAÈšII
-                // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+                // ════════════════════════════════════════════════════════
                 {
                     id: "block-loc-civil",
                     type: "location",
@@ -1516,7 +1536,7 @@ const WEDDING_DEFAULT_BLOCKS = JSON.stringify([
                     show: true,
                     label: "Cununie ReligioasÄƒ",
                     time: "14:00",
-                    locationName: "Biserica SfÃ¢nta Maria",
+                    locationName: "Biserica Sfânta Maria",
                     locationAddress: "Str. Bisericii nr. 5, OraÈ™",
                     wazeLink: ""
                 },
@@ -1531,9 +1551,9 @@ const WEDDING_DEFAULT_BLOCKS = JSON.stringify([
                     wazeLink: ""
                 },
 
-                // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-                // FOTO 4 â€” Cerc cu vignetÄƒ
-                // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+                // ════════════════════════════════════════════════════════
+                // FOTO 4 — Cerc cu vignetă
+                // ════════════════════════════════════════════════════════
                 {
                     id: "block-photo-4",
                     type: "photo",
@@ -1545,9 +1565,9 @@ const WEDDING_DEFAULT_BLOCKS = JSON.stringify([
                     photoMasks: ["vignette"]
                 },
 
-                // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+                // ════════════════════════════════════════════════════════
                 // COD VESTIMENTAR
-                // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+                // ════════════════════════════════════════════════════════
                 {
                     id: "block-dresscode-1",
                     type: "dresscode",
@@ -1557,9 +1577,9 @@ const WEDDING_DEFAULT_BLOCKS = JSON.stringify([
                     content: "Doamne: VÄƒ rugÄƒm sÄƒ evitaÈ›i culorile alb, bej È™i roÈ™u.\nDomni: VÄƒ rugÄƒm sÄƒ evitaÈ›i culoarea bej È™i tonurile similare."
                 },
 
-                // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+                // ════════════════════════════════════════════════════════
                 // CADOURI
-                // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+                // ════════════════════════════════════════════════════════
                 {
                     id: "block-gift-1",
                     type: "gift",
@@ -1567,23 +1587,23 @@ const WEDDING_DEFAULT_BLOCKS = JSON.stringify([
                     sectionTitle: "Sugestie de cadou",
                     content: "Cel mai frumos cadou este prezenÈ›a voastrÄƒ. DacÄƒ doriÈ›i un detaliu, vÄƒ lÄƒsÄƒm mai jos o opÈ›iune.",
                     iban: "RO00 BANK 0000 0000 0000 0000",
-                    ibanName: "Camila & SebastiÃ¡n"
+                    ibanName: "Camila & Sebastián"
                 },
 
-                // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+                // ════════════════════════════════════════════════════════
                 // FÄ‚RÄ‚ COPII
-                // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+                // ════════════════════════════════════════════════════════
                 {
                     id: "block-nokids-1",
                     type: "nokids",
                     show: true,
                     sectionTitle: "Eveniment fÄƒrÄƒ copii",
-                    content: "Nunta noastrÄƒ va fi un eveniment pentru adulÈ›i. VÄƒ rugÄƒm sÄƒ luaÈ›i Ã®n considerare Ã®ngrijirea copiilor Ã®n aceastÄƒ zi specialÄƒ. VÄƒ mulÈ›umim pentru Ã®nÈ›elegere!"
+                    content: "Nunta noastră va fi un eveniment pentru adulți. Vă rugăm să luați în considerare îngrijirea copiilor în această zi specială. Vă mulțumim pentru înțelegere!"
                 },
 
-                // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-                // FOTO 5 â€” Final blob
-                // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+                // ════════════════════════════════════════════════════════
+                // FOTO 5 — Final blob
+                // ════════════════════════════════════════════════════════
                 {
                     id: "block-photo-5",
                     type: "photo",
@@ -1595,9 +1615,9 @@ const WEDDING_DEFAULT_BLOCKS = JSON.stringify([
                     photoMasks: ["fade-b"]
                 },
 
-                // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+                // ════════════════════════════════════════════════════════
                 // MULÈšUMIRE
-                // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+                // ════════════════════════════════════════════════════════
                 {
                     id: "block-thankyou-1",
                     type: "thankyou",
@@ -1614,8 +1634,8 @@ app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // --- MONGODB CONNECTION ---
 mongoose.connect(MONGO_URI)
-  .then(() => { console.log('âœ… Connected to MongoDB'); seedServices(); })
-  .catch(err => console.error('âŒ MongoDB Connection Error:', err));
+  .then(() => { console.log('✅ Connected to MongoDB'); seedServices(); })
+  .catch(err => console.error('❌ MongoDB Connection Error:', err));
 
 // --- UTILS ---
 const generateToken = () => Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 10);
@@ -2601,7 +2621,7 @@ app.post('/api/google-auth', async (req, res) => {
 });
 
 
-// â”€â”€ Helper: filtreaza undefined/null din profil inainte de merge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Helper: filtreaza undefined/null din profil inainte de merge ─────────────
 // Previne ca 'undefined' explicit din profilul userului sa suprascrie defaults
 function cleanProfileForMerge(profile) {
     if (!profile) return {};
@@ -2615,7 +2635,7 @@ app.get('/api/user/me', authenticateToken, async (req, res) => {
     let user = await User.findById(req.user.userId);
     if (!user) return res.status(404).send({ error: 'User not found' });
 
-    // â”€â”€ Auto-inject default blocks if user has none â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Auto-inject default blocks if user has none ───────────────────────
     // Handles: existing users, accounts created before default blocks existed
     if (user.profile?.isSetupComplete) {
       let sections = [];
@@ -2634,7 +2654,7 @@ app.get('/api/user/me', authenticateToken, async (req, res) => {
     const basicPrice = config.pricing.basicPrice;
     const isCompleted = isEventCompleted(user.profile.weddingDate);
 
-    // â”€â”€ Merge template defaults < user profile â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Merge template defaults < user profile ────────────────────────────
     // Citim template-ul ales din project
     const userProject = await Project.findOne({ ownerId: user._id });
     const templateId = userProject?.selectedTemplate || 'castle-magic';
@@ -2812,10 +2832,10 @@ app.post('/api/user/setup-event', authenticateToken, async (req, res) => {
         const defaultData = {};
 
         if (eventType === 'wedding') {
-            // â”€â”€ Demo names & texts (matches the template preview) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // ── Demo names & texts (matches the template preview) ──────────
             defaultData["profile.partner1Name"] = "Camila";
-            defaultData["profile.partner2Name"] = "SebastiÃ¡n";
-            defaultData["profile.welcomeText"] = "Ne bucurÄƒm sÄƒ anunÈ›Äƒm cÄƒsÄƒtoria noastrÄƒ È™i dorim sÄƒ Ã®mpÄƒrÈ›im cu tine acest moment special.";
+            defaultData["profile.partner2Name"] = "Sebastián";
+            defaultData["profile.welcomeText"] = "Ne bucurăm să anunțăm căsătoria noastră și dorim să împărțim cu tine acest moment special.";
             defaultData["profile.celebrationText"] = "nunÈ›ii noastre";
             defaultData["profile.showWelcomeText"] = true;
             defaultData["profile.showCelebrationText"] = true;
@@ -2952,7 +2972,7 @@ app.post('/api/user/archive-event', authenticateToken, async (req, res) => {
             }
         });
 
-        res.send({ success: true, message: 'Eveniment arhivat. PuteÈ›i Ã®ncepe planificarea noului eveniment.' });
+        res.send({ success: true, message: 'Eveniment arhivat. Puteți începe planificarea noului eveniment.' });
 
     } catch (e) {
         console.error(e);
@@ -2974,23 +2994,23 @@ app.get('/api/archived-event/:snapshotId', authenticateToken, async (req, res) =
 
 // --- DATA MODIFICATION ROUTES (Protected by ensureActiveEvent) ---
 
-// â”€â”€â”€ Media upload â€” folder ierarhic per user â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Media upload — folder ierarhic per user ─────────────────────────────────
 //
 //  StructurÄƒ: uploads/{userId[0..1]}/{userId[2..3]}/{userId}/{timestamp}-{random}.jpg
 //  Exemplu:   uploads/5f/3a/5f3ab2c1d.../1700000000-x7k2.jpg
 //
 //  De ce sharding pe 2 nivele:
-//  - 100k useri Ã— 8 poze = 800k fiÈ™iere total
-//  - Cu 2 nivele hex (256 Ã— 256 = 65536 bucket-uri) â†’ avg 12 fiÈ™iere/folder
+//  - 100k useri × 8 poze = 800k fișiere total
+//  - Cu 2 nivele hex (256 × 256 = 65536 bucket-uri) → avg 12 fișiere/folder
 //  - readdir() rapid, backup selectiv, cleanup la È™tergere cont
 
 const UPLOADS_ROOT = path.join(__dirname, 'uploads');
 if (!fs.existsSync(UPLOADS_ROOT)) fs.mkdirSync(UPLOADS_ROOT, { recursive: true });
 
-// ReturneazÄƒ path-ul directorului pentru un userId È™i Ã®l creeazÄƒ dacÄƒ nu existÄƒ
+// Returnează path-ul directorului pentru un userId și îl creează dacă nu există
 function userUploadDir(userId) {
     const uid   = String(userId);
-    const shard = uid.slice(-4, -2) || 'xx';  // ultimele 4 chars â†’ 2 nivele
+    const shard = uid.slice(-4, -2) || 'xx';  // ultimele 4 chars → 2 nivele
     const shard2= uid.slice(-2) || 'xx';
     const dir   = path.join(UPLOADS_ROOT, shard, shard2, uid);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -3014,7 +3034,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
     storage,
-    limits: { fileSize: 32 * 1024 * 1024 }, // 32 MB â€” audio files pot fi mai mari
+    limits: { fileSize: 32 * 1024 * 1024 }, // 32 MB — audio files pot fi mai mari
     fileFilter: (_req, file, cb) => {
         const allowed = [
             'image/jpeg','image/png','image/webp','image/gif','image/avif',
@@ -3026,14 +3046,14 @@ const upload = multer({
     },
 });
 
-// Serve uploads ca static â€” cu cache headers agresive (imaginile nu se schimbÄƒ)
+// Serve uploads ca static — cu cache headers agresive (imaginile nu se schimbă)
 app.use('/uploads', express.static(UPLOADS_ROOT, {
     maxAge: '365d',          // browser cache 1 an
     immutable: true,         // nu re-valideazÄƒ niciodatÄƒ
     etag: true,
 }));
 
-// POST /api/upload â€” un singur fiÈ™ier, returneazÄƒ { url, size }
+// POST /api/upload — un singur fișier, returnează { url, size }
 app.post('/api/upload', authenticateToken, upload.single('file'), (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'Niciun fiÈ™ier primit.' });
@@ -3047,7 +3067,7 @@ app.post('/api/upload', authenticateToken, upload.single('file'), (req, res) => 
     }
 });
 
-// POST /api/download-yt-audio â€” descarcÄƒ audio de pe YouTube cu @ybd-project/ytdl-core
+// POST /api/download-yt-audio — descarcă audio de pe YouTube cu @ybd-project/ytdl-core
 app.post('/api/download-yt-audio', authenticateToken, async (req, res) => {
     const { url } = req.body;
     if (!url || typeof url !== 'string') return res.status(400).json({ error: 'URL lipsÄƒ.' });
@@ -3102,13 +3122,13 @@ app.post('/api/download-yt-audio', authenticateToken, async (req, res) => {
     }
 });
 
-// DELETE /api/upload â€” È™terge un fiÈ™ier; verificÄƒ cÄƒ aparÈ›ine userului autentificat
+// DELETE /api/upload — șterge un fișier; verifică că aparține userului autentificat
 app.delete('/api/upload', authenticateToken, (req, res) => {
     try {
         const { url } = req.body;
         if (!url || typeof url !== 'string') return res.status(400).json({ error: 'URL lipsÄƒ.' });
 
-        // ReconstruieÈ™te path-ul absolut È™i verificÄƒ cÄƒ e Ã®n folderul userului
+        // Reconstruiește path-ul absolut și verifică că e în folderul userului
         const uid      = String(req.user.userId);
         const shard    = uid.slice(-4, -2) || 'xx';
         const shard2   = uid.slice(-2) || 'xx';
@@ -3116,7 +3136,7 @@ app.delete('/api/upload', authenticateToken, (req, res) => {
         const filename = path.basename(url);                          // extrage doar numele
         const filepath = path.join(userDir, filename);
 
-        // Security: path traversal check â€” filepath trebuie sÄƒ fie Ã®n userDir
+        // Security: path traversal check — filepath trebuie să fie în userDir
         if (!filepath.startsWith(userDir + path.sep)) {
             return res.status(403).json({ error: 'Acces interzis.' });
         }
@@ -3128,10 +3148,10 @@ app.delete('/api/upload', authenticateToken, (req, res) => {
     }
 });
 
-// DELETE /api/upload/all/:userId â€” È™terge tot folderul unui user (la È™tergere cont)
+// DELETE /api/upload/all/:userId — șterge tot folderul unui user (la ștergere cont)
 app.delete('/api/upload/all/:userId', authenticateToken, (req, res) => {
     try {
-        // Doar adminul sau userul Ã®nsuÈ™i poate face asta
+        // Doar adminul sau userul însuși poate face asta
         if (req.user.userId !== req.params.userId && req.user.role !== 'admin') {
             return res.status(403).json({ error: 'Acces interzis.' });
         }
@@ -3733,7 +3753,7 @@ app.put('/api/admin/config', authenticateAdmin, async (req, res) => {
     }
 });
 
-// â”€â”€ Services coming soon flag â€” public read â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Services coming soon flag — public read ───────────────────────────────────
 
 // Public pricing config for landing / unauthenticated users
 app.get('/api/config/pricing', async (req, res) => {
@@ -3761,9 +3781,22 @@ app.get('/api/config/public', async (req, res) => {
             premiumPrice: Number(config?.pricing?.premiumPrice || 4900),
             oldPrice: Number(config?.pricing?.oldPrice || 0),
         };
+        const templateVisibility = normalizeTemplateVisibilityMap(config?.templateVisibility);
         res.json({
             pricing,
             servicesComingSoon: !!config?.servicesComingSoon,
+            templateVisibility,
+        });
+    } catch (e) {
+        res.status(500).send({ error: e.message });
+    }
+});
+
+app.get('/api/config/template-visibility', async (req, res) => {
+    try {
+        const config = await getConfig();
+        res.json({
+            templates: normalizeTemplateVisibilityMap(config?.templateVisibility),
         });
     } catch (e) {
         res.status(500).send({ error: e.message });
@@ -3776,7 +3809,7 @@ app.get('/api/config/services-coming-soon', async (req, res) => {
     } catch (e) { res.status(500).send({ error: e.message }); }
 });
 
-// â”€â”€ Services coming soon flag â€” admin toggle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Services coming soon flag — admin toggle ──────────────────────────────────
 app.put('/api/admin/config/services-coming-soon', authenticateAdmin, async (req, res) => {
     try {
         const { enabled } = req.body;
@@ -3789,8 +3822,29 @@ app.put('/api/admin/config/services-coming-soon', authenticateAdmin, async (req,
     } catch (e) { res.status(500).send({ error: e.message }); }
 });
 
+app.put('/api/admin/config/template-visibility/:templateId', authenticateAdmin, async (req, res) => {
+    try {
+        const templateId = String(req.params.templateId || '').trim();
+        const rawStatus = req.body?.status;
+        if (!templateId) return res.status(400).json({ error: 'templateId este obligatoriu.' });
+        if (rawStatus !== 'live' && rawStatus !== 'coming_soon') {
+            return res.status(400).json({ error: "status invalid. Foloseste 'live' sau 'coming_soon'." });
+        }
 
-// â”€â”€ Template Defaults â€” public read (folosit de DashboardApp la incarcare) â”€â”€
+        await SystemConfig.findOneAndUpdate(
+            { key: 'global_config' },
+            { $set: { [`templateVisibility.${templateId}`]: normalizeTemplateStatus(rawStatus) } },
+            { upsert: true }
+        );
+
+        res.json({ templateId, status: normalizeTemplateStatus(rawStatus) });
+    } catch (e) {
+        res.status(500).send({ error: e.message });
+    }
+});
+
+
+// ── Template Defaults — public read (folosit de DashboardApp la incarcare) ──
 app.get('/api/config/template-defaults/:templateId', async (req, res) => {
     try {
         const doc = await TemplateDefaults.findOne({ templateId: req.params.templateId });
@@ -3802,8 +3856,8 @@ app.get('/api/config/template-defaults/:templateId', async (req, res) => {
     } catch (e) { res.status(500).send({ error: e.message }); }
 });
 
-// â”€â”€ Template Defaults â€” admin read â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// DELETE /api/admin/config/template-defaults/:templateId â€” reseteazÄƒ config + È™terge fiÈ™ierele
+// ── Template Defaults — admin read ───────────────────────────────────────────
+// DELETE /api/admin/config/template-defaults/:templateId — resetează config + șterge fișierele
 app.delete('/api/admin/config/template-defaults/:templateId', authenticateAdmin, async (req, res) => {
     try {
         const { templateId } = req.params;
@@ -3823,7 +3877,7 @@ app.delete('/api/admin/config/template-defaults/:templateId', authenticateAdmin,
                 }
             }
         }
-        // introVariants â€” cleanup fiÈ™iere regal
+        // introVariants — cleanup fișiere regal
         if (doc.introVariants) {
             for (const variant of Object.values(doc.introVariants)) {
                 if (variant && typeof variant === 'object') {
@@ -3864,7 +3918,7 @@ app.get('/api/admin/config/template-defaults/:templateId', authenticateAdmin, as
     } catch (e) { res.status(500).send({ error: e.message }); }
 });
 
-// â”€â”€ Template Defaults â€” admin write â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Template Defaults — admin write ──────────────────────────────────────────
 app.post('/api/admin/config/template-defaults/:templateId', authenticateAdmin, async (req, res) => {
     try {
         const { templateId } = req.params;
@@ -3932,7 +3986,7 @@ app.post('/api/admin/config/template-defaults/:templateId', authenticateAdmin, a
     } catch (e) { res.status(500).send({ error: e.message }); }
 });
 
-// â”€â”€ Services Marketplace â€” public read â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Services Marketplace — public read ───────────────────────────────────────
 app.get('/api/services', async (req, res) => {
     try {
         const services = await Service.find({ available: true }).sort({ featured: -1, createdAt: -1 });
@@ -3940,7 +3994,7 @@ app.get('/api/services', async (req, res) => {
     } catch (e) { res.status(500).send({ error: e.message }); }
 });
 
-// â”€â”€ Services Marketplace â€” admin CRUD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Services Marketplace — admin CRUD ────────────────────────────────────────
 app.get('/api/admin/services', authenticateAdmin, async (req, res) => {
     try {
         const services = await Service.find().sort({ createdAt: -1 });
@@ -3971,24 +4025,24 @@ app.delete('/api/admin/services/:id', authenticateAdmin, async (req, res) => {
     } catch (e) { res.status(500).send({ error: e.message }); }
 });
 
-// â”€â”€ Seed default services if collection is empty â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Seed default services if collection is empty ──────────────────────────────
 async function seedServices() {
     const count = await Service.countDocuments();
     if (count > 0) return;
     const defaults = [
         { name: 'Sweet Dreams Candy Bar', category: 'candybar', description: 'Candy bar de lux cu dulciuri artizanale, decoruri personalizate È™i setup complet pentru evenimentul tÄƒu. Include masÄƒ decoratÄƒ, recipiente de sticlÄƒ, etichetare È™i livrare.', priceFrom: 1200, priceTo: 3500, priceUnit: 'total', location: 'BucureÈ™ti', phone: '0721 000 001', instagram: '@sweetdreams.ro', imageUrl: 'https://images.unsplash.com/photo-1558636508-e0db3814bd1d?w=600&q=80', rating: 4.9, reviewCount: 84, tags: ['lux','personalizat','livrare'], featured: true, available: true },
-        { name: 'FormaÈ›ia Romantica', category: 'formatie', description: 'FormaÈ›ie completÄƒ cu 6 muzicieni, repertoriu variat: muzicÄƒ popularÄƒ, manele, internaÈ›ional. ExperienÈ›Äƒ de peste 15 ani Ã®n nunÈ›i È™i evenimente.', priceFrom: 3500, priceTo: 6000, priceUnit: 'total', location: 'BucureÈ™ti & Ã®mprejurimi', phone: '0745 000 002', imageUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600&q=80', rating: 4.8, reviewCount: 127, tags: ['popularÄƒ','manele','internaÈ›ional'], featured: true, available: true },
+        { name: 'Formația Romantica', category: 'formatie', description: 'Formație completă cu 6 muzicieni, repertoriu variat: muzică populară, manele, internațional. Experiență de peste 15 ani în nunți și evenimente.', priceFrom: 3500, priceTo: 6000, priceUnit: 'total', location: 'București & împrejurimi', phone: '0745 000 002', imageUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600&q=80', rating: 4.8, reviewCount: 127, tags: ['populară','manele','internațional'], featured: true, available: true },
         { name: 'DJ Alex Pro', category: 'dj', description: 'DJ profesionist cu echipament premium, lumini È™i sistem de sunet. Playlist personalizat, mixing live, experienÈ›Äƒ la peste 300 de nunÈ›i.', priceFrom: 1500, priceTo: 2500, priceUnit: 'total', location: 'Nationwide', phone: '0733 000 003', instagram: '@djAlexPro', imageUrl: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=600&q=80', rating: 4.7, reviewCount: 203, tags: ['lumini','mixing live','nationwide'], featured: false, available: true },
         { name: 'Atelier Floral Irina', category: 'florarie', description: 'Aranjamente florale pentru nunÈ›i: buchete mireasÄƒ, centrepiece-uri, arcuri florale, decoruri salÄƒ. Flori proaspete din import È™i locale.', priceFrom: 2000, priceUnit: 'total', location: 'Cluj-Napoca', phone: '0756 000 004', website: 'www.atelierfloral.ro', imageUrl: 'https://images.unsplash.com/photo-1487530811015-780de7c30f3a?w=600&q=80', rating: 5.0, reviewCount: 56, tags: ['buchete','aranjamente','arcuri'], featured: true, available: true },
-        { name: 'Studio Lumina Foto', category: 'foto-video', description: 'Pachet complet foto + video pentru nuntÄƒ: 2 fotografi, 2 cameramani, album premium, clip cinematic 4K, drone, livrare Ã®n 60 zile.', priceFrom: 4500, priceTo: 8000, priceUnit: 'total', location: 'BucureÈ™ti', phone: '0766 000 005', website: 'www.studiolumina.ro', imageUrl: 'https://images.unsplash.com/photo-1606216794079-73f9c1f1a108?w=600&q=80', rating: 4.9, reviewCount: 91, tags: ['4K','drone','album premium'], featured: true, available: true },
-        { name: 'Tort de Vis CofetÄƒrie', category: 'cofetarie', description: 'Torturi de nuntÄƒ personalizate, desert table, cupcakes È™i prÄƒjituri. Design unic creat Ã®mpreunÄƒ cu voi. Livrare È™i montaj inclus.', priceFrom: 800, priceTo: 3000, priceUnit: 'total', location: 'IaÈ™i', phone: '0722 000 006', imageUrl: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=600&q=80', rating: 4.8, reviewCount: 142, tags: ['personalizat','livrare','desert table'], featured: false, available: true },
+        { name: 'Studio Lumina Foto', category: 'foto-video', description: 'Pachet complet foto + video pentru nuntă: 2 fotografi, 2 cameramani, album premium, clip cinematic 4K, drone, livrare în 60 zile.', priceFrom: 4500, priceTo: 8000, priceUnit: 'total', location: 'București', phone: '0766 000 005', website: 'www.studiolumina.ro', imageUrl: 'https://images.unsplash.com/photo-1606216794079-73f9c1f1a108?w=600&q=80', rating: 4.9, reviewCount: 91, tags: ['4K','drone','album premium'], featured: true, available: true },
+        { name: 'Tort de Vis Cofetărie', category: 'cofetarie', description: 'Torturi de nuntă personalizate, desert table, cupcakes și prăjituri. Design unic creat împreună cu voi. Livrare și montaj inclus.', priceFrom: 800, priceTo: 3000, priceUnit: 'total', location: 'Iași', phone: '0722 000 006', imageUrl: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=600&q=80', rating: 4.8, reviewCount: 142, tags: ['personalizat','livrare','desert table'], featured: false, available: true },
     ];
-    // Folosim create() Ã®n loc de insertMany() â€” aplicÄƒ schema defaults corect
+    // Folosim create() în loc de insertMany() — aplică schema defaults corect
     for (const d of defaults) await Service.create(d);
-    console.log('âœ… Seeded', defaults.length, 'default services');
+    console.log('✅ Seeded', defaults.length, 'default services');
 }
 
-// â”€â”€ Fix documente vechi fÄƒrÄƒ cÃ¢mpul available â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Fix documente vechi fără câmpul available ─────────────────────────────────
 app.post('/api/admin/services/fix-available', authenticateAdmin, async (req, res) => {
     try {
         const result = await Service.updateMany(
@@ -3999,7 +4053,7 @@ app.post('/api/admin/services/fix-available', authenticateAdmin, async (req, res
     } catch (e) { res.status(500).send({ error: e.message }); }
 });
 
-// â”€â”€ Force reseed â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Force reseed ──────────────────────────────────────────────────────────────
 app.post('/api/admin/services/reseed', authenticateAdmin, async (req, res) => {
     try {
         await Service.deleteMany({});
@@ -4011,18 +4065,18 @@ app.post('/api/admin/services/reseed', authenticateAdmin, async (req, res) => {
 
 
 
-// â”€â”€ Service Requests â€” public submit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Service Requests — public submit ─────────────────────────────────────────
 app.post('/api/service-requests', authenticateToken, async (req, res) => {
     try {
         const { serviceId, serviceName, serviceCategory, name, email, phone, address, contactTime, budget, gdprAccepted, callApproved } = req.body;
-        if (!name || !email || !phone || !serviceId) return res.status(400).send({ error: 'CÃ¢mpuri obligatorii lipsÄƒ.' });
+        if (!name || !email || !phone || !serviceId) return res.status(400).send({ error: 'Câmpuri obligatorii lipsă.' });
         const req2 = new ServiceRequest({ serviceId, serviceName, serviceCategory, name, email, phone, address, contactTime, budget, gdprAccepted, callApproved });
         await req2.save();
         res.status(201).json(req2);
     } catch (e) { res.status(500).send({ error: e.message }); }
 });
 
-// â”€â”€ Service Requests â€” user: own requests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Service Requests — user: own requests ────────────────────────────────────
 app.get('/api/service-requests/mine', authenticateToken, async (req, res) => {
     try {
         const user = await User.findById(req.user.userId).lean();
@@ -4032,7 +4086,7 @@ app.get('/api/service-requests/mine', authenticateToken, async (req, res) => {
     } catch (e) { res.status(500).send({ error: e.message }); }
 });
 
-// â”€â”€ Service Requests â€” admin: all â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Service Requests — admin: all ────────────────────────────────────────────
 app.get('/api/admin/service-requests', authenticateAdmin, async (req, res) => {
     try {
         const requests = await ServiceRequest.find().sort({ createdAt: -1 });
@@ -4040,7 +4094,7 @@ app.get('/api/admin/service-requests', authenticateAdmin, async (req, res) => {
     } catch (e) { res.status(500).send({ error: e.message }); }
 });
 
-// â”€â”€ Service Requests â€” admin: update status â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Service Requests — admin: update status ───────────────────────────────────
 app.put('/api/admin/service-requests/:id', authenticateAdmin, async (req, res) => {
     try {
         const { status, notes } = req.body;
@@ -4378,7 +4432,7 @@ app.post('/api/guest/public-rsvp', async (req, res) => {
     
     // Check if event is active before allowing new public RSVPs
     if (isEventCompleted(owner.profile.weddingDate)) {
-        return res.status(403).send({ error: 'Acest eveniment a fost Ã®ncheiat.' });
+        return res.status(403).send({ error: 'Acest eveniment a fost încheiat.' });
     }
 
     const config = await getConfig();
@@ -4415,9 +4469,9 @@ app.post('/api/guest/public-rsvp', async (req, res) => {
     res.send({ success: true, guest: newGuest });
 });
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
 // INVOICE HELPERS
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
 
 async function generateInvoiceNumber() {
     const year = new Date().getFullYear();
@@ -4437,7 +4491,7 @@ function generateInvoicePDF(data) {
             billingAddress, paymentMethod = 'Netopia / Card Bancar', orderId,
         } = data;
 
-        // Helvetica uses WinAnsiEncoding (U+0000â€“U+00FF). Romanian chars like Ä‚, È˜, Èš
+        // Helvetica uses WinAnsiEncoding (U+0000–U+00FF). Romanian chars like Ă, Ș, Ț
         // are U+0100+ and render as invisible glyphs. Strip diacritics via NFD normalization.
         const t = s => (s || '').normalize('NFD').replace(/[\u0300-\u036f\u0326-\u0329]/g, '').replace(/[^\x00-\x7F]/g, '');
 
@@ -4450,7 +4504,7 @@ function generateInvoicePDF(data) {
         const dateStr = new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
         const W = 595 - 100; // pagina A4 minus margini
 
-        // â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Header ──────────────────────────────────────────────────────────
         doc.fontSize(22).font('Helvetica-Bold').text('FACTURA FISCALA', 50, 50);
         doc.fontSize(10).font('Helvetica').fillColor('#666')
            .text('Wedding Planner Pro', 50, 80)
@@ -4465,7 +4519,7 @@ function generateInvoicePDF(data) {
         // Linie separator
         doc.moveTo(50, 115).lineTo(545, 115).strokeColor('#e0e0e0').lineWidth(1).stroke();
 
-        // â”€â”€ Bill To â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Bill To ─────────────────────────────────────────────────────────
         doc.fontSize(9).font('Helvetica-Bold').fillColor('#888').text('FACTURAT CATRE', 50, 130);
         const clientName = t([billingFirstName, billingLastName].filter(Boolean).join(' ') || 'Client');
         doc.fontSize(11).font('Helvetica-Bold').fillColor('#000').text(clientName, 50, 145);
@@ -4473,7 +4527,7 @@ function generateInvoicePDF(data) {
         if (billingEmail) doc.text(billingEmail, 50, 160);
         if (billingAddress) doc.text(t(billingAddress), 50, 173);
 
-        // â”€â”€ Tabel produse â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Tabel produse ────────────────────────────────────────────────────
         const tableTop = 220;
         doc.fontSize(9).font('Helvetica-Bold').fillColor('#fff')
            .rect(50, tableTop, W, 24).fill('#2d3748').stroke();
@@ -4491,20 +4545,20 @@ function generateInvoicePDF(data) {
            .text(`${Number(amount).toFixed(2)} ${currency}`, 440, rowTop + 8, { width: 50, align: 'right' })
            .text(`${Number(amount).toFixed(2)} ${currency}`, 500, rowTop + 8, { width: 45, align: 'right' });
 
-        // â”€â”€ Total â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Total ────────────────────────────────────────────────────────────
         const totalTop = rowTop + 40;
         doc.moveTo(50, totalTop).lineTo(545, totalTop).strokeColor('#e0e0e0').lineWidth(1).stroke();
         doc.fontSize(12).font('Helvetica-Bold').fillColor('#000')
            .text('TOTAL DE PLATA:', 350, totalTop + 10)
            .text(`${Number(amount).toFixed(2)} ${currency}`, 460, totalTop + 10, { width: 85, align: 'right' });
 
-        // â”€â”€ Detalii plata â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Detalii plata ────────────────────────────────────────────────────
         doc.fontSize(9).font('Helvetica').fillColor('#888')
            .text(`Metoda de plata: ${t(paymentMethod)}`, 50, totalTop + 45)
            .text(`Referinta comanda: ${orderId}`, 50, totalTop + 58)
            .text('Status: ACHITAT', 50, totalTop + 71);
 
-        // â”€â”€ Footer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Footer ───────────────────────────────────────────────────────────
         doc.moveTo(50, 750).lineTo(545, 750).strokeColor('#e0e0e0').lineWidth(1).stroke();
         doc.fontSize(8).fillColor('#aaa')
            .text('Va multumim pentru incredere! Aceasta factura este generata automat.', 50, 760, { align: 'center', width: W });
@@ -4513,9 +4567,9 @@ function generateInvoicePDF(data) {
     });
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
 // NETOPIA PAYMENTS
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
 
 function encryptNetopia(orderData) {
     const builder = new Builder({ headless: false, renderOpts: { pretty: false } });
@@ -4541,7 +4595,7 @@ function encryptNetopia(orderData) {
     };
 }
 
-// 1. Initiate â€” authenticated
+// 1. Initiate — authenticated
 app.post('/api/netopia/initiate', authenticateToken, async (req, res) => {
     try {
         if (!NETOPIA_SIGNATURE) return res.status(400).json({ error: 'NETOPIA_SIGNATURE lipseÈ™te din env.' });
@@ -4686,7 +4740,7 @@ app.post('/api/netopia/initiate', authenticateToken, async (req, res) => {
                 },
                 invoice: {
                     $: { currency: 'RON', amount },
-                    details: `${planDetailsLabel} â€” acces pe viata`,
+                    details: `${planDetailsLabel} — acces pe viata`,
                     contact_info: {
                         billing: {
                             $: { type: billingType === 'company' ? 'company' : 'person' },
@@ -4704,7 +4758,7 @@ app.post('/api/netopia/initiate', authenticateToken, async (req, res) => {
 
         const encrypted = encryptNetopia(orderXml);
 
-        // SalvÄƒm comanda Ã®n profilul userului (status PENDING)
+        // Salvăm comanda în profilul userului (status PENDING)
         await User.findByIdAndUpdate(userId, {
             $push: {
                 payments: {
@@ -4910,7 +4964,7 @@ async function finalizeNetopiaPaymentAsPaid(orderId) {
   };
 }
 
-// 2. IPN (notifyUrl) â€” Netopia trimite JSON, la fel ca Stripe webhook
+// 2. IPN (notifyUrl) — Netopia trimite JSON, la fel ca Stripe webhook
 app.post('/api/netopia/confirm', async (req, res) => {
     console.log('=== NETOPIA IPN RECEIVED ===');
     const crcOk = '<?xml version="1.0" encoding="utf-8"?><crc>OK</crc>';
@@ -4964,21 +5018,21 @@ app.post('/api/netopia/confirm', async (req, res) => {
         }
 
         if (errorCode === '0') {
-            // PlatÄƒ aprobatÄƒ â€” la fel ca Stripe checkout.session.completed
+            // Plată aprobată — la fel ca Stripe checkout.session.completed
             const result = await finalizeNetopiaPaymentAsPaid(orderId);
             console.log(`Netopia IPN: user gÄƒsit pentru orderId=${orderId}:`, !!result?.user);
 
             if (result?.user) {
-                console.log(`âœ… Netopia IPN: user ${result.user._id} â†’ plan=${result.updated?.plan} | facturÄƒ=${result.invoiceNum} | email=${result.emailSent ? 'sent' : 'skip'} (order ${orderId})`);
+                console.log(`✅ Netopia IPN: user ${result.user._id} → plan=${result.updated?.plan} | factură=${result.invoiceNum} | email=${result.emailSent ? 'sent' : 'skip'} (order ${orderId})`);
             } else {
-                console.warn(`Netopia IPN: ordinul ${orderId} nu existÄƒ Ã®n DB`);
+                console.warn(`Netopia IPN: ordinul ${orderId} nu există în DB`);
             }
         } else {
             await User.findOneAndUpdate(
                 { 'payments.invoiceId': orderId },
                 { $set: { 'payments.$.status': 'Failed' } }
             );
-            console.log(`âŒ Netopia: order ${orderId} FAILED (errorCode=${errorCode})`);
+            console.log(`❌ Netopia: order ${orderId} FAILED (errorCode=${errorCode})`);
         }
 
         return res.send(crcOk);
@@ -4989,7 +5043,7 @@ app.post('/api/netopia/confirm', async (req, res) => {
     }
 });
 
-// TEST MANUAL â€” apeleazÄƒ din browser: GET /api/netopia/test-upgrade/:userId
+// TEST MANUAL — apelează din browser: GET /api/netopia/test-upgrade/:userId
 // È˜terge dupÄƒ ce testezi!
 app.get('/api/netopia/test-upgrade/:userId', async (req, res) => {
     try {
@@ -5004,11 +5058,11 @@ app.get('/api/netopia/test-upgrade/:userId', async (req, res) => {
     }
 });
 
-// 3. Return URL (redirectUrl) â€” userul ajunge aici dupÄƒ platÄƒ (browser redirect).
-//    Facem upgrade È™i aici ca fallback, Ã®n cazul Ã®n care IPN-ul nu a ajuns (ex. tunel Cloudflare schimbat).
+// 3. Return URL (redirectUrl) — userul ajunge aici după plată (browser redirect).
+//    Facem upgrade și aici ca fallback, în cazul în care IPN-ul nu a ajuns (ex. tunel Cloudflare schimbat).
 app.get('/api/netopia/return', async (req, res) => {
     try {
-        // Netopia poate trimite orderId ca string sau array dacÄƒ Ã®l punem È™i noi Ã®n URL â€” luÄƒm primul
+        // Netopia poate trimite orderId ca string sau array dacă îl punem și noi în URL — luăm primul
         const rawId = req.query.orderId;
         const orderId = Array.isArray(rawId) ? rawId[0] : (typeof rawId === 'string' ? rawId.split(',')[0] : null);
 
@@ -5016,10 +5070,10 @@ app.get('/api/netopia/return', async (req, res) => {
             const user = await User.findOne({ 'payments.invoiceId': orderId });
             if (user) {
                 const payment = user.payments.find(p => p.invoiceId === orderId);
-                // Facem upgrade doar dacÄƒ e Ã®ncÄƒ Pending (IPN-ul poate fi deja procesat)
+                // Facem upgrade doar dacă e încă Pending (IPN-ul poate fi deja procesat)
                 if (payment && payment.status === 'Pending') {
                     const result = await finalizeNetopiaPaymentAsPaid(orderId);
-                    console.log(`âœ… Netopia return: user ${user._id} â†’ premium | facturÄƒ=${result?.invoiceNum || '-'} | email=${result?.emailSent ? 'sent' : 'skip'} (order ${orderId})`);
+                    console.log(`✅ Netopia return: user ${user._id} → premium | factură=${result?.invoiceNum || '-'} | email=${result?.emailSent ? 'sent' : 'skip'} (order ${orderId})`);
                 }
             }
         }
@@ -5029,7 +5083,7 @@ app.get('/api/netopia/return', async (req, res) => {
     res.redirect(`${CLIENT_URL}/dashboard?payment=success`);
 });
 
-// â”€â”€ HTML Invoice Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── HTML Invoice Page ─────────────────────────────────────────────────────────
 app.get('/invoice/:invoiceNumber', async (req, res) => {
     const { invoiceNumber } = req.params;
     try {
@@ -5141,7 +5195,7 @@ app.get('/invoice/:invoiceNumber', async (req, res) => {
       </thead>
       <tbody>
         <tr>
-          <td>Wedding Planner Pro â€” LicenÈ›Äƒ Premium</td>
+          <td>Wedding Planner Pro — Licență Premium</td>
           <td style="text-align:center">1</td>
           <td style="text-align:right">${amount} RON</td>
           <td>${amount} RON</td>
@@ -5162,8 +5216,8 @@ app.get('/invoice/:invoiceNumber', async (req, res) => {
   </div>
 
   <div class="footer">
-    <div class="footer-text">VÄƒ mulÈ›umim pentru Ã®ncredere! AceastÄƒ facturÄƒ a fost generatÄƒ automat.</div>
-    <button class="print-btn" onclick="window.print()">â¬‡ DescarcÄƒ / PrinteazÄƒ</button>
+    <div class="footer-text">Vă mulțumim pentru încredere! Această factură a fost generată automat.</div>
+    <button class="print-btn" onclick="window.print()">⬇ Descarcă / Printează</button>
   </div>
 </div>
 </body>
@@ -5181,9 +5235,8 @@ app.get('*', (req, res) => {
 });
 
 app.use((err, req, res, next) => {
-    console.error("âŒ GLOBAL ERROR:", err.stack);
+    console.error("❌ GLOBAL ERROR:", err.stack);
     if (!res.headersSent) res.status(500).send({ error: 'Internal Server Error' });
 });
 
 app.listen(PORT, () => console.log(`ðŸš€ Server running at http://localhost:${PORT}`));
-
