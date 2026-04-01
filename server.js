@@ -59,7 +59,7 @@ const NETOPIA_SANDBOX   = process.env.NETOPIA_SANDBOX !== 'false'; // true by de
 const APP_URL = (process.env.APP_URL || CLIENT_URL).replace(/\/$/, '');
 
 // --- IMPORTANT: Pune acelasi ID aici pentru verificare (deși e opțional dacă folosești doar token decoder simplu, e recomandat pentru securitate) ---
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || 'PASTE_YOUR_GOOGLE_CLIENT_ID_HERE';
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '780198284819-p7hf7nqagkhbe6ikp5r4t46kkaktqumc.apps.googleusercontent.com';
 
 const stripe = new Stripe(STRIPE_SECRET_KEY);
 const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
