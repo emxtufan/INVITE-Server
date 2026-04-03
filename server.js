@@ -4581,7 +4581,7 @@ function encryptNetopia(orderData) {
     const cipher    = crypto.createCipheriv('aes-256-cbc', aesKey, iv);
     const encrypted = Buffer.concat([cipher.update(xml, 'utf8'), cipher.final()]);
 
-    const certPath = path.join(process.cwd(), 'sandbox.3BX6-JMJU-8QP0-ACQC-PNHL.public.cer');
+    const certPath = path.join(process.cwd(), 'live.3BL9-T8TC-BOAY-QMKI-ILTP.public.cer');
     if (!fs.existsSync(certPath)) throw new Error('Netopia public.cer not found in project root.');
 
     const publicKey      = crypto.createPublicKey(fs.readFileSync(certPath));
