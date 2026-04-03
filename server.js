@@ -5059,28 +5059,36 @@ app.get('/api/netopia/test-upgrade/:userId', async (req, res) => {
 });
 
 // 3. Return URL (redirectUrl) — userul ajunge aici după plată (browser redirect).
-//    Facem upgrade și aici ca fallback, în cazul în care IPN-ul nu a ajuns (ex. tunel Cloudflare schimbat).
+//    Decidem redirect-ul pe baza statusului salvat în DB de callback-ul IPN.
 app.get('/api/netopia/return', async (req, res) => {
+    let orderId = null;
+    let redirectPaymentStatus = 'failed';
     try {
         // Netopia poate trimite orderId ca string sau array dacă îl punem și noi în URL — luăm primul
         const rawId = req.query.orderId;
-        const orderId = Array.isArray(rawId) ? rawId[0] : (typeof rawId === 'string' ? rawId.split(',')[0] : null);
+        orderId = Array.isArray(rawId) ? rawId[0] : (typeof rawId === 'string' ? rawId.split(',')[0] : null);
 
         if (orderId) {
             const user = await User.findOne({ 'payments.invoiceId': orderId });
             if (user) {
                 const payment = user.payments.find(p => p.invoiceId === orderId);
-                // Facem upgrade doar dacă e încă Pending (IPN-ul poate fi deja procesat)
-                if (payment && payment.status === 'Pending') {
-                    const result = await finalizeNetopiaPaymentAsPaid(orderId);
-                    console.log(`✅ Netopia return: user ${user._id} → premium | factură=${result?.invoiceNum || '-'} | email=${result?.emailSent ? 'sent' : 'skip'} (order ${orderId})`);
+                const paymentStatus = String(payment?.status || '').trim().toLowerCase();
+
+                if (paymentStatus === 'paid') {
+                    redirectPaymentStatus = 'success';
+                } else if (['failed', 'canceled', 'cancelled', 'declined', 'error'].includes(paymentStatus)) {
+                    redirectPaymentStatus = 'failed';
+                } else if (paymentStatus === 'pending' || payment) {
+                    redirectPaymentStatus = 'pending';
                 }
             }
         }
     } catch (err) {
         console.error('Netopia return handler error:', err.message);
     }
-    res.redirect(`${CLIENT_URL}/dashboard?payment=success`);
+    const redirectQuery = new URLSearchParams({ payment: redirectPaymentStatus });
+    if (orderId) redirectQuery.set('orderId', orderId);
+    res.redirect(`${CLIENT_URL}/dashboard?${redirectQuery.toString()}`);
 });
 
 // ── HTML Invoice Page ─────────────────────────────────────────────────────────
