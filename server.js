@@ -31,6 +31,7 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3005; 
+const HOST = process.env.HOST || '0.0.0.0';
 
 // --- CONFIGURARE PRODUCÈšIE VS DEV ---
 const MONGO_URI = process.env.MONGO_URI || '';
@@ -56,7 +57,68 @@ const STRIPE_SMARTBILL_DEBUG =
 // --- NETOPIA ---
 const NETOPIA_SIGNATURE = process.env.NETOPIA_SIGNATURE || '';
 const NETOPIA_SANDBOX   = process.env.NETOPIA_SANDBOX !== 'false'; // true by default
+const NETOPIA_PRIVATE_KEY_PATH = process.env.NETOPIA_PRIVATE_KEY_PATH || '';
+const NETOPIA_PUBLIC_CERT_PATH = process.env.NETOPIA_PUBLIC_CERT_PATH || '';
 const APP_URL = (process.env.APP_URL || CLIENT_URL).replace(/\/$/, '');
+
+function resolveNetopiaFilePath(candidates = []) {
+  for (const candidate of candidates) {
+    const normalized = String(candidate || '').trim();
+    if (!normalized) continue;
+    const absolutePath = path.isAbsolute(normalized)
+      ? normalized
+      : path.join(process.cwd(), normalized.replace(/^\.\//, ''));
+    if (fs.existsSync(absolutePath)) return absolutePath;
+  }
+  return '';
+}
+
+function getNetopiaPrivateKeyPath() {
+  const signature = String(NETOPIA_SIGNATURE || '').trim();
+  const signatureCandidates = signature
+    ? [
+        `./live.${signature}private.key`,
+        `./sandbox.${signature}private.key`,
+      ]
+    : [];
+  return resolveNetopiaFilePath([
+    NETOPIA_PRIVATE_KEY_PATH,
+    ...signatureCandidates,
+    './live.3BL9-T8TC-BOAY-QMKI-ILTPprivate.key',
+    './sandbox.3BX6-JMJU-8QP0-ACQC-PNHLprivate.key',
+  ]);
+}
+
+function getNetopiaPublicCertPath() {
+  const signature = String(NETOPIA_SIGNATURE || '').trim();
+  const signatureCandidates = signature
+    ? [
+        `./live.${signature}.public.cer`,
+        `./sandbox.${signature}.public.cer`,
+      ]
+    : [];
+  return resolveNetopiaFilePath([
+    NETOPIA_PUBLIC_CERT_PATH,
+    ...signatureCandidates,
+    './live.3BL9-T8TC-BOAY-QMKI-ILTP.public.cer',
+    './sandbox.3BX6-JMJU-8QP0-ACQC-PNHL.public.cer',
+  ]);
+}
+
+if (NETOPIA_SIGNATURE) {
+  const resolvedPrivateKeyPath = getNetopiaPrivateKeyPath();
+  const resolvedPublicCertPath = getNetopiaPublicCertPath();
+
+  if (!resolvedPrivateKeyPath) {
+    console.warn('[NETOPIA] Private key file not found. IPN confirmations will fail until key path is fixed.');
+  }
+  if (!resolvedPublicCertPath) {
+    console.warn('[NETOPIA] Public certificate not found. Payment initiation will fail until cert path is fixed.');
+  }
+  if (NETOPIA_SANDBOX && resolvedPrivateKeyPath && /live\./i.test(path.basename(resolvedPrivateKeyPath))) {
+    console.warn('[NETOPIA] NETOPIA_SANDBOX=true but private key appears to be live.');
+  }
+}
 
 // --- IMPORTANT: Pune acelasi ID aici pentru verificare (deÈ™i e opÈ›ional dacÄƒ foloseÈ™ti doar token decoder simplu, e recomandat pentru securitate) ---
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '780198284819-p7hf7nqagkhbe6ikp5r4t46kkaktqumc.apps.googleusercontent.com';
@@ -3053,6 +3115,7 @@ app.use('/uploads', express.static(UPLOADS_ROOT, {
     etag: true,
 }));
 
+
 // POST /api/upload — un singur fișier, returnează { url, size }
 app.post('/api/upload', authenticateToken, upload.single('file'), (req, res) => {
     try {
@@ -4581,8 +4644,10 @@ function encryptNetopia(orderData) {
     const cipher    = crypto.createCipheriv('aes-256-cbc', aesKey, iv);
     const encrypted = Buffer.concat([cipher.update(xml, 'utf8'), cipher.final()]);
 
-    const certPath = path.join(process.cwd(), 'live.3BL9-T8TC-BOAY-QMKI-ILTP.public.cer');
-    if (!fs.existsSync(certPath)) throw new Error('Netopia public.cer not found in project root.');
+    const certPath = getNetopiaPublicCertPath();
+    if (!certPath) {
+      throw new Error('Netopia public certificate not found. Set NETOPIA_PUBLIC_CERT_PATH or place certificate in project root.');
+    }
 
     const publicKey      = crypto.createPublicKey(fs.readFileSync(certPath));
     const encryptedKey   = crypto.publicEncrypt({ key: publicKey, padding: crypto.constants.RSA_PKCS1_PADDING }, aesKey);
@@ -4979,11 +5044,12 @@ app.post('/api/netopia/confirm', async (req, res) => {
     }
 
     try {
-        // 1. Citim cheia privatÄƒ
-        const keyRelPath = (process.env.NETOPIA_PRIVATE_KEY_PATH || './sandbox.3BX6-JMJU-8QP0-ACQC-PNHLprivate.key').replace(/^\.\//, '');
-        const keyPath = path.join(process.cwd(), keyRelPath);
-        console.log('Netopia IPN: cheia privatÄƒ la', keyPath, '| existÄƒ:', fs.existsSync(keyPath));
-        if (!fs.existsSync(keyPath)) throw new Error(`Cheia privatÄƒ nu existÄƒ: ${keyPath}`);
+        // 1. Citim cheia privata
+        const keyPath = getNetopiaPrivateKeyPath();
+        console.log('Netopia IPN: private key path', keyPath || '(not found)');
+        if (!keyPath) {
+          throw new Error('Netopia private key not found. Set NETOPIA_PRIVATE_KEY_PATH or place key in project root.');
+        }
 
         // 2. DecriptÄƒm cheia AES cu RSA (node-forge evitÄƒ restricÈ›ia din OpenSSL 3)
         const privateKeyPem   = fs.readFileSync(keyPath, 'utf8');
@@ -5247,4 +5313,9 @@ app.use((err, req, res, next) => {
     if (!res.headersSent) res.status(500).send({ error: 'Internal Server Error' });
 });
 
-app.listen(PORT, () => console.log(`ðŸš€ Server running at http://localhost:${PORT}`));
+app.listen(PORT, HOST, () => {
+    const displayHost = HOST === '0.0.0.0' ? 'localhost' : HOST;
+    console.log(`Server running on ${HOST}:${PORT} (local preview: http://${displayHost}:${PORT})`);
+});
+
+

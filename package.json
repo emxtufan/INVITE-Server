@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "vite",
     "start": "node server.js"
-    
   },
   "dependencies": {
     "@distube/ytdl-core": "^4.16.12",
