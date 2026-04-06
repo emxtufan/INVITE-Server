@@ -125,6 +125,7 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '780198284819-p7hf7nqag
 
 const stripe = new Stripe(STRIPE_SECRET_KEY);
 const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
+const DEFAULT_EMAIL_APP_NAME = 'Event Smart Assistant';
 const emailNotifications = createEmailNotifications({
   apiKey: RESEND_API_KEY,
   from: RESEND_FROM,
@@ -1763,22 +1764,35 @@ async function pushUserNotification(userId, payload = {}) {
   return true;
 }
 
-async function sendEmailVerificationOtp(email, otp, eventType = 'wedding') {
+function getEmailBrandingForUser(userDoc) {
+  const eventType = String(userDoc?.profile?.eventType || 'wedding').trim().toLowerCase() || 'wedding';
+  const isSetupComplete = Boolean(userDoc?.profile?.isSetupComplete);
+  return {
+    eventType,
+    appName: isSetupComplete ? '' : DEFAULT_EMAIL_APP_NAME,
+  };
+}
+
+async function sendEmailVerificationOtp(email, otp, branding = {}) {
+  const { eventType = 'wedding', appName = '' } = branding || {};
   return emailNotifications.sendVerificationOtp({
     email,
     otp,
     ttlMinutes: EMAIL_OTP_TTL_MINUTES,
     eventType,
+    appName,
   });
 }
 
-async function sendPasswordResetOtp(email, otp, name = '', eventType = 'wedding') {
+async function sendPasswordResetOtp(email, otp, name = '', branding = {}) {
+  const { eventType = 'wedding', appName = '' } = branding || {};
   return emailNotifications.sendPasswordResetOtp({
     email,
     name,
     otp,
     ttlMinutes: PASSWORD_RESET_OTP_TTL_MINUTES,
     eventType,
+    appName,
   });
 }
 
@@ -1847,7 +1861,7 @@ app.post('/api/register', async (req, res) => {
     });
 
     await newUser.save();
-    const sent = await sendEmailVerificationOtp(user, otp, newUser.profile?.eventType || 'wedding');
+    const sent = await sendEmailVerificationOtp(user, otp, getEmailBrandingForUser(newUser));
     if (!sent) {
       await User.findByIdAndDelete(newUser._id);
       return res.status(500).send({ error: 'Nu am putut trimite emailul de verificare. Incearca din nou.' });
@@ -1900,7 +1914,7 @@ app.post('/api/auth/resend-otp', async (req, res) => {
     };
     await foundUser.save();
 
-    const sent = await sendEmailVerificationOtp(user, otp, foundUser.profile?.eventType || 'wedding');
+    const sent = await sendEmailVerificationOtp(user, otp, getEmailBrandingForUser(foundUser));
     if (!sent) {
       return res.status(500).send({ error: 'Nu am putut retrimite codul OTP.' });
     }
@@ -1959,12 +1973,7 @@ app.post('/api/auth/request-password-reset', async (req, res) => {
     };
     await foundUser.save();
 
-    const sent = await sendPasswordResetOtp(
-      foundUser.user,
-      otp,
-      getUserDisplayName(foundUser),
-      foundUser.profile?.eventType || 'wedding',
-    );
+    const sent = await sendPasswordResetOtp(foundUser.user, otp, getUserDisplayName(foundUser), getEmailBrandingForUser(foundUser));
     if (!sent) {
       return res.status(500).send({ error: 'Nu am putut trimite emailul de resetare. Incearca din nou.' });
     }
@@ -2061,7 +2070,7 @@ app.post('/api/auth/reset-password', async (req, res) => {
         changedAt: new Date(),
         ip: requestIp,
         userAgent: requestUserAgent,
-        eventType: foundUser.profile?.eventType || 'wedding',
+        ...getEmailBrandingForUser(foundUser),
       });
     } catch (emailError) {
       console.error('[EMAIL] Password changed email failed:', emailError);
@@ -2134,7 +2143,7 @@ app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
         changedAt: new Date(),
         ip: requestIp,
         userAgent: requestUserAgent,
-        eventType: foundUser.profile?.eventType || 'wedding',
+        ...getEmailBrandingForUser(foundUser),
       });
     } catch (emailError) {
       console.error('[EMAIL] Account change-password email failed:', emailError);
@@ -2197,7 +2206,7 @@ app.post('/api/auth/request-email-change', authenticateToken, async (req, res) =
     };
     await foundUser.save();
 
-    const sent = await sendEmailVerificationOtp(newEmail, otp, foundUser.profile?.eventType || 'wedding');
+    const sent = await sendEmailVerificationOtp(newEmail, otp, getEmailBrandingForUser(foundUser));
     if (!sent) {
       return res.status(500).send({ error: 'Nu am putut trimite codul OTP pe noul email.' });
     }
@@ -2292,7 +2301,7 @@ app.post('/api/auth/confirm-email-change', authenticateToken, async (req, res) =
         await emailNotifications.sendVerificationSuccessEmail({
           email: pendingEmail,
           name: getUserDisplayName(foundUser),
-          eventType: foundUser.profile?.eventType || 'wedding',
+          ...getEmailBrandingForUser(foundUser),
         });
       } catch (emailError) {
         console.error('[EMAIL] Email-change verification email failed:', emailError);
@@ -2365,7 +2374,7 @@ app.post('/api/auth/verify-email-otp', async (req, res) => {
         await emailNotifications.sendVerificationSuccessEmail({
           email: foundUser.user,
           name: getUserDisplayName(foundUser),
-          eventType: foundUser.profile?.eventType || 'wedding',
+          ...getEmailBrandingForUser(foundUser),
         });
       } catch (emailError) {
         console.error('[EMAIL] Verification success email failed:', emailError);
@@ -2410,7 +2419,7 @@ app.post('/api/auth/verify-email-otp', async (req, res) => {
             ip: requestIp,
             userAgent: requestUserAgent,
             loginAt: new Date(nowMs),
-            eventType: foundUser.profile?.eventType || 'wedding',
+            ...getEmailBrandingForUser(foundUser),
           });
 
           if (sent) {
@@ -3559,7 +3568,7 @@ app.post('/api/admin/users/:id/notify', authenticateAdmin, async (req, res) => {
                     title,
                     message,
                     priority,
-                    eventType: targetUser.profile?.eventType || 'wedding',
+                    ...getEmailBrandingForUser(targetUser),
                 });
             } catch (emailError) {
                 console.error('[EMAIL] Admin notification failed:', emailError);
@@ -3701,7 +3710,7 @@ app.post('/api/admin/email/send-test', authenticateAdmin, async (req, res) => {
                 ip: req.socket?.remoteAddress || 'admin-trigger',
                 userAgent: req.headers['user-agent'] || 'admin-panel',
                 loginAt: new Date(),
-                eventType: user.profile?.eventType || 'wedding',
+                ...getEmailBrandingForUser(user),
             });
         } else if (type === 'reminder') {
             sent = await emailNotifications.sendEventReminderEmail({

@@ -22,16 +22,16 @@ const normalizeEventLabel = (eventType = "wedding") => {
 };
 
 const EVENT_APP_NAMES = {
-  wedding: "WeddingPro",
-  baptism: "Botez Pro",
-  anniversary: "Aniversare Pro",
-  kids: "Kids Party Pro",
-  office: "Corporate Pro",
-  birthday: "Birthday Pro",
+  wedding: "Wedding",
+  baptism: "Botez",
+  anniversary: "Aniversare",
+  kids: "Kids Party",
+  office: "Corporate",
+  birthday: "Birthday",
 };
 
 const resolveAppNameForEmail = ({
-  eventType = "wedding",
+  eventType = "",
   appNameOverride = "",
   fallbackAppName = "Event Smart Assistant",
 } = {}) => {
