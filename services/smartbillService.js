@@ -95,6 +95,17 @@ export function normalizeBillingTaxCode({ billingType, vatCode }) {
   return '';
 }
 
+function normalizeIndividualIdentifier(value) {
+  const raw = sanitize(value, 64);
+  if (!raw) return '-';
+  if (raw === '-') return '-';
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length === 13 && !/^0{13}$/.test(digits)) {
+    return digits;
+  }
+  return '-';
+}
+
 async function smartbillRequest(url, options = {}) {
   const method = options.method || 'GET';
   const bodyPreview =
@@ -184,10 +195,7 @@ async function createInvoice({
           : billing.name || 'Client',
         180,
       ),
-      vatCode:
-        billing.type === 'company'
-          ? sanitize(billing.vatCode, 64)
-          : '',
+      vatCode: sanitize(billing.vatCode, 64),
       regCom: sanitize(billing.regNo || '', 64),
       isTaxPayer: billing.type === 'company',
       address: sanitize(billing.address || '-'),
@@ -195,7 +203,7 @@ async function createInvoice({
       county: sanitize(billing.county || ''),
       country: sanitize(billing.country || 'Romania'),
       email: sanitize(billing.email || ''),
-      saveToDb: true,
+      saveToDb: billing.type === 'company',
     },
     issueDate: issueDate || getToday(),
     dueDate: dueDate || addDays(14),
@@ -363,10 +371,13 @@ export async function createSmartbillInvoiceFlow({
 
   const normalizedBilling = {
     ...billing,
-    vatCode: normalizeBillingTaxCode({
-      billingType: billing.type === 'company' ? 'company' : 'individual',
-      vatCode: billing.vatCode,
-    }),
+    vatCode:
+      billing.type === 'company'
+        ? normalizeBillingTaxCode({
+            billingType: 'company',
+            vatCode: billing.vatCode,
+          })
+        : normalizeIndividualIdentifier(billing.vatCode),
   };
 
   const { invoiceData, series, number } = await createInvoice({
