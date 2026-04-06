@@ -21,6 +21,26 @@ const normalizeEventLabel = (eventType = "wedding") => {
   return map[key] || key || "Eveniment";
 };
 
+const EVENT_APP_NAMES = {
+  wedding: "WeddingPro",
+  baptism: "Botez Pro",
+  anniversary: "Aniversare Pro",
+  kids: "Kids Party Pro",
+  office: "Corporate Pro",
+  birthday: "Birthday Pro",
+};
+
+const resolveAppNameForEmail = ({
+  eventType = "wedding",
+  appNameOverride = "",
+  fallbackAppName = "Event Smart Assistant",
+} = {}) => {
+  const override = String(appNameOverride || "").trim();
+  if (override) return override;
+  const key = String(eventType || "").toLowerCase();
+  return EVENT_APP_NAMES[key] || String(fallbackAppName || "").trim() || "Event Smart Assistant";
+};
+
 const formatDate = (value) => {
   if (!value) return "";
   const d = new Date(value);
@@ -220,6 +240,12 @@ export function createEmailNotifications({
   logger = console,
 }) {
   const resend = apiKey ? new Resend(apiKey) : null;
+  const getEmailAppName = ({ eventType = "wedding", appName: appNameOverride = "" } = {}) =>
+    resolveAppNameForEmail({
+      eventType,
+      appNameOverride,
+      fallbackAppName: appName,
+    });
 
   const send = async ({ to, subject, html, attachments = [] }) => {
     if (!resend) {
@@ -244,7 +270,14 @@ export function createEmailNotifications({
     }
   };
 
-  const sendVerificationOtp = async ({ email, otp, ttlMinutes = 10 }) => {
+  const sendVerificationOtp = async ({
+    email,
+    otp,
+    ttlMinutes = 10,
+    eventType = "wedding",
+    appName: appNameOverride = "",
+  }) => {
+    const dynamicAppName = getEmailAppName({ eventType, appName: appNameOverride });
     const safeOtp = escapeHtml(otp || "");
     const contentHtml = `
       <p style="margin:0 0 12px;font-size:14px;color:#3f3f46">
@@ -258,10 +291,10 @@ export function createEmailNotifications({
     `;
 
     const html = renderEmailLayout({
-      appName,
+      appName: dynamicAppName,
       headerLabel: "Security",
       title: "Cod OTP pentru verificare email",
-      intro: `Contul tau ${appName} asteapta confirmarea adresei de email.`,
+      intro: `Contul tau ${dynamicAppName} asteapta confirmarea adresei de email.`,
       contentHtml,
       footerNote: "Acest cod este strict personal si nu trebuie transmis altor persoane.",
       theme: "indigo",
@@ -269,12 +302,20 @@ export function createEmailNotifications({
 
     return send({
       to: email,
-      subject: sanitizeSubject(`Cod verificare email ${appName}`),
+      subject: sanitizeSubject(`Cod verificare email ${dynamicAppName}`),
       html,
     });
   };
 
-  const sendPasswordResetOtp = async ({ email, name = "", otp, ttlMinutes = 10 }) => {
+  const sendPasswordResetOtp = async ({
+    email,
+    name = "",
+    otp,
+    ttlMinutes = 10,
+    eventType = "wedding",
+    appName: appNameOverride = "",
+  }) => {
+    const dynamicAppName = getEmailAppName({ eventType, appName: appNameOverride });
     const safeName = escapeHtml(name || "prietene");
     const safeOtp = escapeHtml(otp || "");
     const contentHtml = `
@@ -289,17 +330,17 @@ export function createEmailNotifications({
     `;
 
     const html = renderEmailLayout({
-      appName,
+      appName: dynamicAppName,
       headerLabel: "Password Reset",
       title: "Cod OTP pentru resetare parola",
-      intro: `Cerere de resetare parola pentru contul ${appName}.`,
+      intro: `Cerere de resetare parola pentru contul ${dynamicAppName}.`,
       contentHtml,
       theme: "indigo",
     });
 
     return send({
       to: email,
-      subject: sanitizeSubject(`Cod resetare parola ${appName}`),
+      subject: sanitizeSubject(`Cod resetare parola ${dynamicAppName}`),
       html,
     });
   };
@@ -310,7 +351,10 @@ export function createEmailNotifications({
     changedAt = new Date(),
     ip = "",
     userAgent = "",
+    eventType = "wedding",
+    appName: appNameOverride = "",
   }) => {
+    const dynamicAppName = getEmailAppName({ eventType, appName: appNameOverride });
     const safeName = escapeHtml(name || "prietene");
     const safeDateTime = formatDateTime(changedAt);
     const safeIp = String(ip || "necunoscut");
@@ -331,7 +375,7 @@ export function createEmailNotifications({
     `;
 
     const html = renderEmailLayout({
-      appName,
+      appName: dynamicAppName,
       headerLabel: "Security",
       title: "Parola contului a fost schimbata",
       intro: "Notificare de securitate.",
@@ -343,12 +387,18 @@ export function createEmailNotifications({
 
     return send({
       to: email,
-      subject: sanitizeSubject(`Parola contului a fost schimbata - ${appName}`),
+      subject: sanitizeSubject(`Parola contului a fost schimbata - ${dynamicAppName}`),
       html,
     });
   };
 
-  const sendVerificationSuccessEmail = async ({ email, name = "" }) => {
+  const sendVerificationSuccessEmail = async ({
+    email,
+    name = "",
+    eventType = "wedding",
+    appName: appNameOverride = "",
+  }) => {
+    const dynamicAppName = getEmailAppName({ eventType, appName: appNameOverride });
     const safeName = escapeHtml(name || "prietene");
     const contentHtml = `
       <p style="margin:0 0 12px;font-size:14px;color:#3f3f46">
@@ -363,7 +413,7 @@ export function createEmailNotifications({
     `;
 
     const html = renderEmailLayout({
-      appName,
+      appName: dynamicAppName,
       headerLabel: "Account",
       title: "Email verificat cu succes",
       intro: "Contul tau este activ.",
@@ -375,7 +425,7 @@ export function createEmailNotifications({
 
     return send({
       to: email,
-      subject: sanitizeSubject(`Email verificat cu succes - ${appName}`),
+      subject: sanitizeSubject(`Email verificat cu succes - ${dynamicAppName}`),
       html,
     });
   };
@@ -386,7 +436,9 @@ export function createEmailNotifications({
     eventType = "wedding",
     eventName = "",
     eventDate,
+    appName: appNameOverride = "",
   }) => {
+    const dynamicAppName = getEmailAppName({ eventType, appName: appNameOverride });
     const safeName = escapeHtml(name || "prietene");
     const safeEventLabel = normalizeEventLabel(eventType);
     const safeEventName = String(eventName || "").trim();
@@ -409,7 +461,7 @@ export function createEmailNotifications({
     `;
 
     const html = renderEmailLayout({
-      appName,
+      appName: dynamicAppName,
       headerLabel: "Welcome",
       title: "Bine ai venit",
       intro: "Evenimentul tau a fost configurat cu succes.",
@@ -421,7 +473,7 @@ export function createEmailNotifications({
 
     return send({
       to: email,
-      subject: sanitizeSubject(`Evenimentul tau este gata in ${appName}`),
+      subject: sanitizeSubject(`Evenimentul tau este gata in ${dynamicAppName}`),
       html,
     });
   };
@@ -431,7 +483,10 @@ export function createEmailNotifications({
     ip = "",
     userAgent = "",
     loginAt = new Date(),
+    eventType = "wedding",
+    appName: appNameOverride = "",
   }) => {
+    const dynamicAppName = getEmailAppName({ eventType, appName: appNameOverride });
     const safeIp = String(ip || "necunoscut");
     const safeUa = String(userAgent || "necunoscut").slice(0, 240);
     const safeDateTime = formatDateTime(loginAt);
@@ -451,10 +506,10 @@ export function createEmailNotifications({
     `;
 
     const html = renderEmailLayout({
-      appName,
+      appName: dynamicAppName,
       headerLabel: "Security",
       title: "Alerta conectare cont",
-      intro: `Monitorizare automata ${appName}.`,
+      intro: `Monitorizare automata ${dynamicAppName}.`,
       contentHtml,
       ctaLabel: clientUrl ? "Verifica contul" : "",
       ctaUrl: clientUrl || "",
@@ -463,7 +518,7 @@ export function createEmailNotifications({
 
     return send({
       to: email,
-      subject: sanitizeSubject(`Alerta conectare ${appName}`),
+      subject: sanitizeSubject(`Alerta conectare ${dynamicAppName}`),
       html,
     });
   };
@@ -475,7 +530,9 @@ export function createEmailNotifications({
     eventName = "",
     eventDate,
     daysLeft,
+    appName: appNameOverride = "",
   }) => {
+    const dynamicAppName = getEmailAppName({ eventType, appName: appNameOverride });
     const safeName = escapeHtml(name || "prietene");
     const safeEventLabel = normalizeEventLabel(eventType);
     const safeEventName = String(eventName || "").trim();
@@ -501,7 +558,7 @@ export function createEmailNotifications({
     `;
 
     const html = renderEmailLayout({
-      appName,
+      appName: dynamicAppName,
       headerLabel: "Reminder",
       title: "Reminder eveniment",
       intro: "Revino in dashboard pentru ultimele ajustari.",
@@ -513,7 +570,7 @@ export function createEmailNotifications({
 
     return send({
       to: email,
-      subject: sanitizeSubject(`Reminder eveniment - ${appName}`),
+      subject: sanitizeSubject(`Reminder eveniment - ${dynamicAppName}`),
       html,
     });
   };
@@ -524,7 +581,10 @@ export function createEmailNotifications({
     title = "",
     message = "",
     priority = "normal",
+    eventType = "wedding",
+    appName: appNameOverride = "",
   }) => {
+    const dynamicAppName = getEmailAppName({ eventType, appName: appNameOverride });
     const safeName = escapeHtml(name || "utilizator");
     const normalizedPriority = String(priority || "").toLowerCase() === "high" ? "high" : "normal";
     const priorityLabel = normalizedPriority === "high" ? "HIGH PRIORITY" : "NORMAL PRIORITY";
@@ -549,7 +609,7 @@ export function createEmailNotifications({
     `;
 
     const html = renderEmailLayout({
-      appName,
+      appName: dynamicAppName,
       headerLabel: "Admin Message",
       title: plainTitle || "Notificare noua",
       intro: "Aceasta notificare a fost trimisa direct din platforma.",
@@ -561,7 +621,7 @@ export function createEmailNotifications({
 
     return send({
       to: email,
-      subject: sanitizeSubject(`${normalizedPriority === "high" ? "[HIGH] " : ""}${plainTitle} - ${appName}`),
+      subject: sanitizeSubject(`${normalizedPriority === "high" ? "[HIGH] " : ""}${plainTitle} - ${dynamicAppName}`),
       html,
     });
   };
@@ -575,7 +635,9 @@ export function createEmailNotifications({
     eventType = "wedding",
     eventName = "",
     eventDate,
+    appName: appNameOverride = "",
   }) => {
+    const dynamicAppName = getEmailAppName({ eventType, appName: appNameOverride });
     const safeOwner = escapeHtml(ownerName || "organizator");
     const safeGuest = String(guestName || "").trim() || "Invitat";
     const normalizedStatus = String(status || "").toLowerCase();
@@ -641,7 +703,7 @@ export function createEmailNotifications({
     `;
 
     const html = renderEmailLayout({
-      appName,
+      appName: dynamicAppName,
       headerLabel: "RSVP",
       title: "Actualizare RSVP invitat",
       intro: "Notificare automata dupa raspunsul invitatului.",
@@ -665,10 +727,13 @@ export function createEmailNotifications({
     amount = 0,
     currency = "RON",
     issueDate = new Date(),
+    eventType = "wedding",
     eventName = "",
     invoiceUrl = "",
     attachments = [],
+    appName: appNameOverride = "",
   }) => {
+    const dynamicAppName = getEmailAppName({ eventType, appName: appNameOverride });
     const safeName = escapeHtml(name || "client");
     const safeInvoice = escapeHtml(invoiceNumber || "-");
     const safeAmount = `${Number(amount || 0).toFixed(2)} ${escapeHtml(currency || "RON")}`;
@@ -690,7 +755,7 @@ export function createEmailNotifications({
     `;
 
     const html = renderEmailLayout({
-      appName,
+      appName: dynamicAppName,
       headerLabel: "Facturare",
       title: "Factura dumneavoastra",
       intro: "Document fiscal emis dupa confirmarea platii.",
@@ -702,7 +767,7 @@ export function createEmailNotifications({
 
     return send({
       to: email,
-      subject: sanitizeSubject(`Factura ${invoiceNumber || ""} - ${appName}`),
+      subject: sanitizeSubject(`Factura ${invoiceNumber || ""} - ${dynamicAppName}`),
       html,
       attachments,
     });

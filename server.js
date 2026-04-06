@@ -1429,6 +1429,7 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
             amount: amountTotal,
             currency: 'RON',
             issueDate: new Date(),
+            eventType: user?.profile?.eventType || 'wedding',
             eventName: relatedEventName || '',
             invoiceUrl: invoicePublicUrl,
             attachments: attachment ? [attachment] : [],
@@ -1762,20 +1763,22 @@ async function pushUserNotification(userId, payload = {}) {
   return true;
 }
 
-async function sendEmailVerificationOtp(email, otp) {
+async function sendEmailVerificationOtp(email, otp, eventType = 'wedding') {
   return emailNotifications.sendVerificationOtp({
     email,
     otp,
     ttlMinutes: EMAIL_OTP_TTL_MINUTES,
+    eventType,
   });
 }
 
-async function sendPasswordResetOtp(email, otp, name = '') {
+async function sendPasswordResetOtp(email, otp, name = '', eventType = 'wedding') {
   return emailNotifications.sendPasswordResetOtp({
     email,
     name,
     otp,
     ttlMinutes: PASSWORD_RESET_OTP_TTL_MINUTES,
+    eventType,
   });
 }
 
@@ -1844,7 +1847,7 @@ app.post('/api/register', async (req, res) => {
     });
 
     await newUser.save();
-    const sent = await sendEmailVerificationOtp(user, otp);
+    const sent = await sendEmailVerificationOtp(user, otp, newUser.profile?.eventType || 'wedding');
     if (!sent) {
       await User.findByIdAndDelete(newUser._id);
       return res.status(500).send({ error: 'Nu am putut trimite emailul de verificare. Incearca din nou.' });
@@ -1897,7 +1900,7 @@ app.post('/api/auth/resend-otp', async (req, res) => {
     };
     await foundUser.save();
 
-    const sent = await sendEmailVerificationOtp(user, otp);
+    const sent = await sendEmailVerificationOtp(user, otp, foundUser.profile?.eventType || 'wedding');
     if (!sent) {
       return res.status(500).send({ error: 'Nu am putut retrimite codul OTP.' });
     }
@@ -1956,7 +1959,12 @@ app.post('/api/auth/request-password-reset', async (req, res) => {
     };
     await foundUser.save();
 
-    const sent = await sendPasswordResetOtp(foundUser.user, otp, getUserDisplayName(foundUser));
+    const sent = await sendPasswordResetOtp(
+      foundUser.user,
+      otp,
+      getUserDisplayName(foundUser),
+      foundUser.profile?.eventType || 'wedding',
+    );
     if (!sent) {
       return res.status(500).send({ error: 'Nu am putut trimite emailul de resetare. Incearca din nou.' });
     }
@@ -2053,6 +2061,7 @@ app.post('/api/auth/reset-password', async (req, res) => {
         changedAt: new Date(),
         ip: requestIp,
         userAgent: requestUserAgent,
+        eventType: foundUser.profile?.eventType || 'wedding',
       });
     } catch (emailError) {
       console.error('[EMAIL] Password changed email failed:', emailError);
@@ -2125,6 +2134,7 @@ app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
         changedAt: new Date(),
         ip: requestIp,
         userAgent: requestUserAgent,
+        eventType: foundUser.profile?.eventType || 'wedding',
       });
     } catch (emailError) {
       console.error('[EMAIL] Account change-password email failed:', emailError);
@@ -2187,7 +2197,7 @@ app.post('/api/auth/request-email-change', authenticateToken, async (req, res) =
     };
     await foundUser.save();
 
-    const sent = await sendEmailVerificationOtp(newEmail, otp);
+    const sent = await sendEmailVerificationOtp(newEmail, otp, foundUser.profile?.eventType || 'wedding');
     if (!sent) {
       return res.status(500).send({ error: 'Nu am putut trimite codul OTP pe noul email.' });
     }
@@ -2282,6 +2292,7 @@ app.post('/api/auth/confirm-email-change', authenticateToken, async (req, res) =
         await emailNotifications.sendVerificationSuccessEmail({
           email: pendingEmail,
           name: getUserDisplayName(foundUser),
+          eventType: foundUser.profile?.eventType || 'wedding',
         });
       } catch (emailError) {
         console.error('[EMAIL] Email-change verification email failed:', emailError);
@@ -2354,6 +2365,7 @@ app.post('/api/auth/verify-email-otp', async (req, res) => {
         await emailNotifications.sendVerificationSuccessEmail({
           email: foundUser.user,
           name: getUserDisplayName(foundUser),
+          eventType: foundUser.profile?.eventType || 'wedding',
         });
       } catch (emailError) {
         console.error('[EMAIL] Verification success email failed:', emailError);
@@ -2398,6 +2410,7 @@ app.post('/api/auth/verify-email-otp', async (req, res) => {
             ip: requestIp,
             userAgent: requestUserAgent,
             loginAt: new Date(nowMs),
+            eventType: foundUser.profile?.eventType || 'wedding',
           });
 
           if (sent) {
@@ -3546,6 +3559,7 @@ app.post('/api/admin/users/:id/notify', authenticateAdmin, async (req, res) => {
                     title,
                     message,
                     priority,
+                    eventType: targetUser.profile?.eventType || 'wedding',
                 });
             } catch (emailError) {
                 console.error('[EMAIL] Admin notification failed:', emailError);
@@ -3687,6 +3701,7 @@ app.post('/api/admin/email/send-test', authenticateAdmin, async (req, res) => {
                 ip: req.socket?.remoteAddress || 'admin-trigger',
                 userAgent: req.headers['user-agent'] || 'admin-panel',
                 loginAt: new Date(),
+                eventType: user.profile?.eventType || 'wedding',
             });
         } else if (type === 'reminder') {
             sent = await emailNotifications.sendEventReminderEmail({
@@ -4995,6 +5010,7 @@ async function finalizeNetopiaPaymentAsPaid(orderId) {
         amount: Number(payment.amount || 0),
         currency: 'RON',
         issueDate: new Date(),
+        eventType: user?.profile?.eventType || 'wedding',
         eventName: payment.relatedEventName || user?.profile?.eventName || '',
         invoiceUrl: invoicePublicUrl,
         attachments: attachment ? [attachment] : [],
