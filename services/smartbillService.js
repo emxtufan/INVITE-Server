@@ -92,8 +92,7 @@ export function normalizeBillingTaxCode({ billingType, vatCode }) {
   if (billingType === 'company') {
     return sanitize(vatCode, 64).toUpperCase();
   }
-  const fallback = digitsOnly(getSmartbillEnv().individualVatCode) || '0000000000000';
-  return fallback;
+  return '0000000000000';
 }
 
 async function smartbillRequest(url, options = {}) {

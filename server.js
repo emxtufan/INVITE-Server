@@ -830,7 +830,7 @@ function toSmartbillLocality({
   const normalizedCity = String(city || '').trim();
   const normalizedSector = normalizeSectorName(sector || '');
   const isRomania = ['romania', 'ro'].includes(String(normalizedCountry || '').toLowerCase());
-  if (billingType === 'company' && isRomania && isBucharestCity(normalizedCity)) {
+  if (isRomania && isBucharestCity(normalizedCity)) {
     return normalizedSector || '';
   }
   return normalizedCity;
@@ -3544,16 +3544,20 @@ app.post('/api/profile', authenticateToken, ensureActiveEvent, async (req, res) 
             const billingCountry = normalizeCountryName(
               normalizedBillingAddressData.country || profile.billingCountry || 'Romania',
             );
-            const billingType = String(profile.billingType || '').trim() === 'company' ? 'company' : 'individual';
             const normalizedSector = normalizeSectorName(profile.billingSector || '');
+            const hasBillingCityPayload = Object.prototype.hasOwnProperty.call(profile, 'billingCity');
+            const hasBillingSectorPayload = Object.prototype.hasOwnProperty.call(profile, 'billingSector');
             if (isBucharestCity(billingCity)) {
                 profile.billingCounty = 'Bucuresti';
                 if (profile.billingAddressData && typeof profile.billingAddressData === 'object') {
                   profile.billingAddressData.county = 'Bucuresti';
                 }
-                if (billingType === 'company') {
-                    profile.billingSector = normalizedSector;
+                if (hasStructuredBillingPayload || hasBillingCityPayload || hasBillingSectorPayload) {
+                  if (!normalizedSector) {
+                    return res.status(400).send({ error: 'Pentru Bucuresti, sectorul este obligatoriu.' });
+                  }
                 }
+                profile.billingSector = normalizedSector;
             } else if (profile.billingSector) {
                 profile.billingSector = normalizedSector;
             }
@@ -4487,8 +4491,8 @@ app.post('/api/upgrade', authenticateToken, async (req, res) => {
     if (billingType === 'company' && !billingCompany) {
         return res.status(400).send({ error: "Numele companiei este obligatoriu pentru facturare pe firma." });
     }
-    if (billingType === 'company' && isBucharestCity(billingCity) && !billingSector) {
-        return res.status(400).send({ error: "Pentru firme din Bucuresti, selecteaza sectorul." });
+    if (isBucharestCity(billingCity) && !billingSector) {
+        return res.status(400).send({ error: "Pentru Bucuresti, sectorul este obligatoriu." });
     }
     if (!billingAddress || !billingCity || !billingCountry || !billingCounty) {
       return res.status(400).send({ error: "Completeaza adresa, orasul, judetul si tara pentru facturare." });
@@ -5017,8 +5021,8 @@ app.post('/api/netopia/initiate', authenticateToken, async (req, res) => {
         if (billingType === 'company' && !billingCompany) {
           return res.status(400).json({ error: 'Numele companiei este obligatoriu pentru facturare pe firma.' });
         }
-        if (billingType === 'company' && isBucharestCity(billingCity) && !billingSector) {
-          return res.status(400).json({ error: 'Pentru firme din Bucuresti, selecteaza sectorul.' });
+        if (isBucharestCity(billingCity) && !billingSector) {
+          return res.status(400).json({ error: 'Pentru Bucuresti, sectorul este obligatoriu.' });
         }
         if (!billingAddress || !billingCity || !billingCountry || !billingCounty) {
           return res.status(400).json({ error: 'Completeaza adresa, orasul, judetul si tara pentru facturare.' });
