@@ -92,7 +92,7 @@ export function normalizeBillingTaxCode({ billingType, vatCode }) {
   if (billingType === 'company') {
     return sanitize(vatCode, 64).toUpperCase();
   }
-  return '0000000000000';
+  return '';
 }
 
 async function smartbillRequest(url, options = {}) {
@@ -184,7 +184,10 @@ async function createInvoice({
           : billing.name || 'Client',
         180,
       ),
-      vatCode: sanitize(billing.vatCode, 64),
+      vatCode:
+        billing.type === 'company'
+          ? sanitize(billing.vatCode, 64)
+          : '',
       regCom: sanitize(billing.regNo || '', 64),
       isTaxPayer: billing.type === 'company',
       address: sanitize(billing.address || '-'),
