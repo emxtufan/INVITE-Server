@@ -3318,11 +3318,35 @@ const upload = multer({
 });
 
 // Serve uploads ca static — cu cache headers agresive (imaginile nu se schimbă)
-app.use('/uploads', express.static(UPLOADS_ROOT, {
+const uploadsHeadersMiddleware = (req, res, next) => {
+    const requestOrigin = normalizeOrigin(req.headers.origin || '');
+    if (
+      requestOrigin &&
+      (localhostOriginRegex.test(requestOrigin) || allowedCorsOrigins.has(requestOrigin))
+    ) {
+      res.setHeader('Access-Control-Allow-Origin', requestOrigin);
+      res.setHeader('Vary', 'Origin');
+    } else {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+    }
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    next();
+};
+
+const uploadsStaticOptions = {
     maxAge: '365d',          // browser cache 1 an
-    immutable: true,         // nu re-valideazÄƒ niciodatÄƒ
+    immutable: true,         // nu revalideaza
     etag: true,
-}));
+    setHeaders: (res) => {
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      if (!res.getHeader('Access-Control-Allow-Origin')) {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+      }
+    },
+};
+
+app.use('/uploads', uploadsHeadersMiddleware, express.static(UPLOADS_ROOT, uploadsStaticOptions));
+app.use('/api/uploads', uploadsHeadersMiddleware, express.static(UPLOADS_ROOT, uploadsStaticOptions));
 
 
 // POST /api/upload — un singur fișier, returnează { url, size }
@@ -5610,5 +5634,6 @@ app.listen(PORT, HOST, () => {
     const displayHost = HOST === '0.0.0.0' ? 'localhost' : HOST;
     console.log(`Server running on ${HOST}:${PORT} (local preview: http://${displayHost}:${PORT})`);
 });
+
 
 
