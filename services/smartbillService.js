@@ -96,14 +96,7 @@ export function normalizeBillingTaxCode({ billingType, vatCode }) {
 }
 
 function normalizeIndividualIdentifier(value) {
-  const raw = sanitize(value, 64);
-  if (!raw) return '-';
-  if (raw === '-') return '-';
-  const digits = raw.replace(/\D/g, '');
-  if (digits.length === 13 && !/^0{13}$/.test(digits)) {
-    return digits;
-  }
-  return '-';
+  return '0000000000000';
 }
 
 async function smartbillRequest(url, options = {}) {
