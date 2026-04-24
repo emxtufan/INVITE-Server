@@ -854,9 +854,13 @@ export function createEmailNotifications({
     sendWelcomeEmail,
     sendLoginAlertEmail,
     sendEventReminderEmail,
+    sendProductUpdateEmail,
+    sendCustomHtmlEmail,
     sendAdminNotificationEmail,
     sendGuestRsvpEmail,
     sendBillingInvoiceEmail,
   };
 }
+
+
 
