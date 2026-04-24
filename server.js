@@ -4763,6 +4763,32 @@ app.get('/api/invite-data/:token', async (req, res) => {
     }
 });
 
+
+app.get('/api/slug-availability/:slug', authenticateToken, async (req, res) => {
+    try {
+        const slug = String(req.params.slug || '')
+            .toLowerCase()
+            .replace(/[^a-z0-9-]/g, '-')
+            .replace(/-+/g, '-')
+            .replace(/^-|-$/g, '');
+
+        if (!slug) {
+            return res.status(400).send({ error: 'Slug invalid.' });
+        }
+
+        const owner = await User.findOne({ "profile.inviteSlug": slug }).select('_id');
+        if (!owner) {
+            return res.send({ success: true, available: true, isOwn: false });
+        }
+
+        const isOwn = String(owner._id) === String(req.user.userId);
+        return res.send({ success: true, available: isOwn, isOwn });
+    } catch (e) {
+        console.error('slug-availability error:', e);
+        res.status(500).send({ error: e.message });
+    }
+});
+
 app.get('/api/public-invite-data/:slug', async (req, res) => {
     try {
         const { slug } = req.params;
