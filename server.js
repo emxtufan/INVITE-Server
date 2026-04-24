@@ -3933,7 +3933,15 @@ app.get('/api/admin/email/status', authenticateAdmin, async (req, res) => {
 
 app.post('/api/admin/email/send-test', authenticateAdmin, async (req, res) => {
     try {
-        const { userId, type } = req.body || {};
+        const {
+            userId,
+            type,
+            subject = '',
+            preheader = '',
+            html = '',
+            customHtml = '',
+            customSubject = '',
+        } = req.body || {};
         if (!userId || !type) {
             return res.status(400).send({ error: 'userId si type sunt obligatorii.' });
         }
@@ -3969,8 +3977,22 @@ app.post('/api/admin/email/send-test', authenticateAdmin, async (req, res) => {
                 eventDate: user.profile?.weddingDate,
                 daysLeft: computeDaysUntilDate(user.profile?.weddingDate),
             });
+        } else if (type === 'product_update') {
+            sent = await emailNotifications.sendProductUpdateEmail({
+                email,
+                name: getUserDisplayName(user),
+                eventType: user.profile?.eventType || 'wedding',
+                title: customSubject || subject || 'Am facut update la platforma Esa',
+                intro: preheader || 'Invitatiile au fost actualizate, iar configurarea este acum mai simpla si mai intuitiva.',
+            });
+        } else if (type === 'custom_html') {
+            sent = await emailNotifications.sendCustomHtmlEmail({
+                email,
+                subject: customSubject || subject || 'Email custom Esa',
+                html: customHtml || html,
+            });
         } else {
-            return res.status(400).send({ error: 'Tip email invalid. Foloseste welcome, login_alert sau reminder.' });
+            return res.status(400).send({ error: 'Tip email invalid. Foloseste welcome, login_alert, reminder, product_update sau custom_html.' });
         }
 
         if (!sent) {

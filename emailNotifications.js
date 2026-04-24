@@ -773,6 +773,78 @@ export function createEmailNotifications({
     });
   };
 
+  const sendProductUpdateEmail = async ({
+    email,
+    name = "",
+    eventType = "wedding",
+    appName: appNameOverride = "",
+    title = "",
+    intro = "",
+    items = [],
+    ctaLabel = "",
+  }) => {
+    const dynamicAppName = getEmailAppName({ eventType, appName: appNameOverride });
+    const safeName = escapeHtml(name || "prietene");
+    const normalizedItems = Array.isArray(items)
+      ? items.filter((item) => item && item.label && String(item.value || "").trim())
+      : [];
+
+    const contentHtml = `
+      <p style="margin:0 0 12px;font-size:14px;color:#3f3f46">
+        Salut, <b style="color:#09090b">${safeName}</b>! Am pregatit un update nou pentru platforma <b style="color:#09090b">${escapeHtml(dynamicAppName)}</b>.
+      </p>
+      ${renderInfoCard(
+        normalizedItems.length
+          ? normalizedItems
+          : [
+              { label: "Wizard", value: "Mai simplu si mai intuitiv" },
+              { label: "Invitatii", value: "Actualizate si imbunatatite" },
+              { label: "Preview", value: "Mai clar pentru editare" },
+              { label: "Configurare", value: "Mai usoara pentru texte, imagini si culori" },
+              { label: "Experienta", value: "Mai buna pe mobil si desktop" },
+            ],
+        "emerald",
+      )}
+      <p style="margin:12px 0 0;font-size:13px;color:#52525b">
+        Intra in contul tau si vezi noile actualizari disponibile. Daca ai deja o invitatie configurata, poti reveni oricand pentru a descoperi imbunatatirile.
+      </p>
+    `;
+
+    const html = renderEmailLayout({
+      appName: dynamicAppName,
+      headerLabel: "Product Update",
+      title: String(title || "Platforma Esa a fost actualizata").trim() || "Platforma Esa a fost actualizata",
+      intro:
+        String(intro || "Invitatiile au fost actualizate, iar configurarea este acum mai simpla si mai intuitiva.").trim() ||
+        "Invitatiile au fost actualizate, iar configurarea este acum mai simpla si mai intuitiva.",
+      contentHtml,
+      ctaLabel: String(ctaLabel || (clientUrl ? "Deschide dashboard" : "")).trim(),
+      ctaUrl: clientUrl || "",
+      theme: "emerald",
+    });
+
+    return send({
+      to: email,
+      subject: sanitizeSubject(String(title || "Am facut update la platforma Esa").trim() || "Am facut update la platforma Esa"),
+      html,
+    });
+  };
+
+  const sendCustomHtmlEmail = async ({
+    email,
+    subject = "",
+    html = "",
+  }) => {
+    const safeSubject = sanitizeSubject(subject || "Email custom Esa");
+    const safeHtml = String(html || "").trim();
+    if (!safeSubject || !safeHtml) return false;
+
+    return send({
+      to: email,
+      subject: safeSubject,
+      html: safeHtml,
+    });
+  };
   return {
     isEnabled: Boolean(resend),
     sendVerificationOtp,
@@ -787,3 +859,4 @@ export function createEmailNotifications({
     sendBillingInvoiceEmail,
   };
 }
+
