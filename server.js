@@ -3466,6 +3466,23 @@ app.post('/api/profile', authenticateToken, ensureActiveEvent, async (req, res) 
     try {
         const { profile } = req.body;
         if (profile && typeof profile === 'object') {
+            if (Object.prototype.hasOwnProperty.call(profile, 'inviteSlug')) {
+                const normalizedInviteSlug = String(profile.inviteSlug || '')
+                    .toLowerCase()
+                    .replace(/[^a-z0-9-]/g, '-')
+                    .replace(/-+/g, '-')
+                    .replace(/^-|-$/g, '');
+                profile.inviteSlug = normalizedInviteSlug;
+                if (normalizedInviteSlug) {
+                    const existingSlugOwner = await User.findOne({
+                        _id: { $ne: req.user.userId },
+                        'profile.inviteSlug': normalizedInviteSlug,
+                    }).select('_id');
+                    if (existingSlugOwner) {
+                        return res.status(409).send({ error: 'Slug-ul invitatiei este deja folosit de alt utilizator.' });
+                    }
+                }
+            }
             if (Object.prototype.hasOwnProperty.call(profile, 'phone')) {
                 const nextPhone = normalizeRoPhone(profile.phone || '');
                 if (nextPhone && !isValidRoPhone(nextPhone)) {
@@ -3892,6 +3909,23 @@ app.put('/api/admin/users/:id', authenticateAdmin, async (req, res) => {
             if (typeof nextProfile.weddingDate === 'string') {
                 const rawDate = nextProfile.weddingDate.trim();
                 nextProfile.weddingDate = rawDate ? new Date(rawDate) : undefined;
+            }
+            if (Object.prototype.hasOwnProperty.call(nextProfile, 'inviteSlug')) {
+                const normalizedInviteSlug = String(nextProfile.inviteSlug || '')
+                    .toLowerCase()
+                    .replace(/[^a-z0-9-]/g, '-')
+                    .replace(/-+/g, '-')
+                    .replace(/^-|-$/g, '');
+                nextProfile.inviteSlug = normalizedInviteSlug;
+                if (normalizedInviteSlug) {
+                    const existingSlugOwner = await User.findOne({
+                        _id: { $ne: req.params.id },
+                        'profile.inviteSlug': normalizedInviteSlug,
+                    }).select('_id');
+                    if (existingSlugOwner) {
+                        return res.status(409).send({ error: 'Slug-ul invitatiei este deja folosit de alt utilizator.' });
+                    }
+                }
             }
             if (isPastOrInvalidEventDate(nextProfile.weddingDate)) {
                 return res.status(400).send({ error: 'Data evenimentului nu poate fi in trecut.' });
