@@ -1662,221 +1662,220 @@ const limiter = rateLimit({
 // ─── Default wedding blocks — used on setup AND when customSections is empty ──
 const WEDDING_DEFAULT_BLOCKS = JSON.stringify([
 
-                // ════════════════════════════════════════════════════════
-                // FOTO 1 — Cuplu hero (arc + fade jos) — ca în preview
-                // ════════════════════════════════════════════════════════
-                {
-                    id: "block-photo-1",
-                    type: "photo",
-                    show: true,
-                    imageData: "",
-                    altText: "Fotografie cuplu",
-                    aspectRatio: "3:4",
-                    photoClip: "arch",
-                    photoMasks: ["fade-b"]
-                },
+    // ════════════════════════════════════════════════════════
+    // FOTO 1 — Cuplu hero (arc + fade jos) — ca în preview
+    // ════════════════════════════════════════════════════════
+    {
+        id: "block-photo-1",
+        type: "photo",
+        show: true,
+        imageData: "",
+        altText: "Fotografie cuplu",
+        aspectRatio: "3:4",
+        photoClip: "arch",
+        photoMasks: ["fade-b"]
+    },
 
-                // ════════════════════════════════════════════════════════
-                // CITAT
-                // ════════════════════════════════════════════════════════
-                {
-                    id: "block-quote-1",
-                    type: "quote",
-                    show: true,
-                    content: "Dragostea noastră s-a născut în Dios, crește în Cristos și va rămâne prin harul Său.",
-                    label: "1 Corinteni 13:4"
-                },
+    // ════════════════════════════════════════════════════════
+    // CITAT
+    // ════════════════════════════════════════════════════════
+    {
+        id: "block-quote-1",
+        type: "quote",
+        show: true,
+        content: "Dragostea noastră s-a născut în Dumnezeu, crește în Hristos și va rămâne prin harul Său.",
+        label: "1 Corinteni 13:4"
+    },
 
-                // ════════════════════════════════════════════════════════
-                // MUZICÄ‚
-                // ════════════════════════════════════════════════════════
-                {
-                    id: "block-music-1",
-                    type: "music",
-                    show: true,
-                    musicTitle: "Cântecul nostru",
-                    musicArtist: "Artist",
-                    musicUrl: "",
-                    musicType: "none"
-                },
+    // ════════════════════════════════════════════════════════
+    // MUZICĂ
+    // ════════════════════════════════════════════════════════
+    {
+        id: "block-music-1",
+        type: "music",
+        show: true,
+        musicTitle: "Cântecul nostru",
+        musicArtist: "Artist",
+        musicUrl: "",
+        musicType: "none"
+    },
 
-                // ════════════════════════════════════════════════════════
-                // COUNTDOWN — dark section
-                // ════════════════════════════════════════════════════════
-                {
-                    id: "block-countdown-1",
-                    type: "countdown",
-                    show: true
-                },
+    // ════════════════════════════════════════════════════════
+    // COUNTDOWN — dark section
+    // ════════════════════════════════════════════════════════
+    {
+        id: "block-countdown-1",
+        type: "countdown",
+        show: true
+    },
 
-                // ════════════════════════════════════════════════════════
-                // CALENDAR
-                // ════════════════════════════════════════════════════════
-                {
-                    id: "block-calendar-1",
-                    type: "calendar",
-                    show: true
-                },
+    // ════════════════════════════════════════════════════════
+    // CALENDAR
+    // ════════════════════════════════════════════════════════
+    {
+        id: "block-calendar-1",
+        type: "calendar",
+        show: true
+    },
 
-                // ════════════════════════════════════════════════════════
-                // FOTO 2 — Landscape romantic
-                // ════════════════════════════════════════════════════════
-                {
-                    id: "block-photo-2",
-                    type: "photo",
-                    show: true,
-                    imageData: "",
-                    altText: "Fotografie romantic",
-                    aspectRatio: "16:9",
-                    photoClip: "rounded",
-                    photoMasks: []
-                },
+    // ════════════════════════════════════════════════════════
+    // FOTO 2 — Landscape romantic
+    // ════════════════════════════════════════════════════════
+    {
+        id: "block-photo-2",
+        type: "photo",
+        show: true,
+        imageData: "",
+        altText: "Fotografie romantică",
+        aspectRatio: "16:9",
+        photoClip: "rounded",
+        photoMasks: []
+    },
 
-                // ════════════════════════════════════════════════════════
-                // FOTO 3 — Portret vertical
-                // ════════════════════════════════════════════════════════
-                {
-                    id: "block-photo-3",
-                    type: "photo",
-                    show: true,
-                    imageData: "",
-                    altText: "Fotografie portret",
-                    aspectRatio: "3:4",
-                    photoClip: "rounded",
-                    photoMasks: []
-                },
+    // ════════════════════════════════════════════════════════
+    // FOTO 3 — Portret vertical
+    // ════════════════════════════════════════════════════════
+    {
+        id: "block-photo-3",
+        type: "photo",
+        show: true,
+        imageData: "",
+        altText: "Fotografie portret",
+        aspectRatio: "3:4",
+        photoClip: "rounded",
+        photoMasks: []
+    },
 
-                // ════════════════════════════════════════════════════════
-                // PÄ‚RINÈšI
-                // ════════════════════════════════════════════════════════
-                {
-                    id: "block-parents-1",
-                    type: "parents",
-                    show: true,
-                    sectionTitle: "PÄƒrinÈ›ii NoÈ™tri",
-                    content: "Cu drag È™i recunoÈ™tinÈ›Äƒ, alÄƒturi de pÄƒrinÈ›ii noÈ™tri:"
-                },
+    // ════════════════════════════════════════════════════════
+    // PĂRINȚI
+    // ════════════════════════════════════════════════════════
+    {
+        id: "block-parents-1",
+        type: "parents",
+        show: true,
+        sectionTitle: "Părinții noștri",
+        content: "Cu drag și recunoștință, alături de părinții noștri :"
+    },
 
-                // ════════════════════════════════════════════════════════
-                // NAÈ˜I
-                // ════════════════════════════════════════════════════════
-                {
-                    id: "block-godparents-1",
-                    type: "godparents",
-                    show: true,
-                    sectionTitle: "NaÈ™ii NoÈ™tri",
-                    content: "AlÄƒturi de naÈ™ii noÈ™tri, care ne-au cÄƒlÄƒuzit paÈ™ii:"
-                },
+    // ════════════════════════════════════════════════════════
+    // NAȘI
+    // ════════════════════════════════════════════════════════
+    {
+        id: "block-godparents-1",
+        type: "godparents",
+        show: true,
+        sectionTitle: "Nașii noștri",
+        content: "Alături de nașii noștri, care ne-au călăuzit pașii:"
+    },
 
-                // ════════════════════════════════════════════════════════
-                // LOCAÈšII
-                // ════════════════════════════════════════════════════════
-                {
-                    id: "block-loc-civil",
-                    type: "location",
-                    show: true,
-                    label: "Cununie CivilÄƒ",
-                    time: "12:00",
-                    locationName: "Starea CivilÄƒ",
-                    locationAddress: "Str. Exemplu nr. 1, OraÈ™",
-                    wazeLink: ""
-                },
-                {
-                    id: "block-loc-church",
-                    type: "location",
-                    show: true,
-                    label: "Cununie ReligioasÄƒ",
-                    time: "14:00",
-                    locationName: "Biserica Sfânta Maria",
-                    locationAddress: "Str. Bisericii nr. 5, OraÈ™",
-                    wazeLink: ""
-                },
-                {
-                    id: "block-loc-party",
-                    type: "location",
-                    show: true,
-                    label: "Petrecere",
-                    time: "18:00",
-                    locationName: "Salon Grand Ballroom",
-                    locationAddress: "Str. Petrecerii nr. 10, OraÈ™",
-                    wazeLink: ""
-                },
+    // ════════════════════════════════════════════════════════
+    // LOCAȚII
+    // ════════════════════════════════════════════════════════
+    {
+        id: "block-loc-civil",
+        type: "location",
+        show: true,
+        label: "Cununie civilă",
+        time: "12:00",
+        locationName: "Starea Civilă",
+        locationAddress: "Str. Exemplu nr. 1, Oraș",
+        wazeLink: ""
+    },
+    {
+        id: "block-loc-church",
+        type: "location",
+        show: true,
+        label: "Cununie religioasă",
+        time: "14:00",
+        locationName: "Biserica Sfânta Maria",
+        locationAddress: "Str. Bisericii nr. 5, Oraș",
+        wazeLink: ""
+    },
+    {
+        id: "block-loc-party",
+        type: "location",
+        show: true,
+        label: "Petrecere",
+        time: "18:00",
+        locationName: "Salon Grand Ballroom",
+        locationAddress: "Str. Petrecerii nr. 10, Oraș",
+        wazeLink: ""
+    },
 
-                // ════════════════════════════════════════════════════════
-                // FOTO 4 — Cerc cu vignetă
-                // ════════════════════════════════════════════════════════
-                {
-                    id: "block-photo-4",
-                    type: "photo",
-                    show: true,
-                    imageData: "",
-                    altText: "Fotografie",
-                    aspectRatio: "1:1",
-                    photoClip: "circle",
-                    photoMasks: ["vignette"]
-                },
+    // ════════════════════════════════════════════════════════
+    // FOTO 4 — Cerc cu vignetă
+    // ════════════════════════════════════════════════════════
+    {
+        id: "block-photo-4",
+        type: "photo",
+        show: true,
+        imageData: "",
+        altText: "Fotografie",
+        aspectRatio: "1:1",
+        photoClip: "circle",
+        photoMasks: ["vignette"]
+    },
 
-                // ════════════════════════════════════════════════════════
-                // COD VESTIMENTAR
-                // ════════════════════════════════════════════════════════
-                {
-                    id: "block-dresscode-1",
-                    type: "dresscode",
-                    show: true,
-                    sectionTitle: "Cod vestimentar",
-                    label: "Elegant",
-                    content: "Doamne: VÄƒ rugÄƒm sÄƒ evitaÈ›i culorile alb, bej È™i roÈ™u.\nDomni: VÄƒ rugÄƒm sÄƒ evitaÈ›i culoarea bej È™i tonurile similare."
-                },
+    // ════════════════════════════════════════════════════════
+    // COD VESTIMENTAR
+    // ════════════════════════════════════════════════════════
+    {
+        id: "block-dresscode-1",
+        type: "dresscode",
+        show: true,
+        sectionTitle: "Cod vestimentar",
+        label: "Elegant",
+        content: "Doamnelor: Vă rugăm să evitați culorile alb, bej și roșu.\nDomnilor: Vă rugăm să evitați culoarea bej și tonurile similare."
+    },
 
-                // ════════════════════════════════════════════════════════
-                // CADOURI
-                // ════════════════════════════════════════════════════════
-                {
-                    id: "block-gift-1",
-                    type: "gift",
-                    show: true,
-                    sectionTitle: "Sugestie de cadou",
-                    content: "Cel mai frumos cadou este prezenÈ›a voastrÄƒ. DacÄƒ doriÈ›i un detaliu, vÄƒ lÄƒsÄƒm mai jos o opÈ›iune.",
-                    iban: "RO00 BANK 0000 0000 0000 0000",
-                    ibanName: "Camila & Sebastián"
-                },
+    // ════════════════════════════════════════════════════════
+    // CADOURI
+    // ════════════════════════════════════════════════════════
+    {
+        id: "block-gift-1",
+        type: "gift",
+        show: true,
+        sectionTitle: "Sugestie de cadou",
+        content: "Cel mai frumos cadou este prezența voastră. Dacă doriți un detaliu, vă lăsăm mai jos o opțiune.",
+        iban: "RO00 BANK 0000 0000 0000 0000",
+        ibanName: "Camila & Sebastián"
+    },
 
-                // ════════════════════════════════════════════════════════
-                // FÄ‚RÄ‚ COPII
-                // ════════════════════════════════════════════════════════
-                {
-                    id: "block-nokids-1",
-                    type: "nokids",
-                    show: true,
-                    sectionTitle: "Eveniment fÄƒrÄƒ copii",
-                    content: "Nunta noastră va fi un eveniment pentru adulți. Vă rugăm să luați în considerare îngrijirea copiilor în această zi specială. Vă mulțumim pentru înțelegere!"
-                },
+    // ════════════════════════════════════════════════════════
+    // FĂRĂ COPII
+    // ════════════════════════════════════════════════════════
+    {
+        id: "block-nokids-1",
+        type: "nokids",
+        show: true,
+        sectionTitle: "Eveniment fără copii",
+        content: "Nunta noastră va fi un eveniment dedicat adulților. Vă rugăm să luați în considerare îngrijirea copiilor în această zi specială. Vă mulțumim pentru înțelegere!"
+    },
 
-                // ════════════════════════════════════════════════════════
-                // FOTO 5 — Final blob
-                // ════════════════════════════════════════════════════════
-                {
-                    id: "block-photo-5",
-                    type: "photo",
-                    show: true,
-                    imageData: "",
-                    altText: "Fotografie finalÄƒ",
-                    aspectRatio: "3:4",
-                    photoClip: "blob",
-                    photoMasks: ["fade-b"]
-                },
+    // ════════════════════════════════════════════════════════
+    // FOTO 5 — Final blob
+    // ════════════════════════════════════════════════════════
+    {
+        id: "block-photo-5",
+        type: "photo",
+        show: true,
+        imageData: "",
+        altText: "Fotografie finală",
+        aspectRatio: "3:4",
+        photoClip: "blob",
+        photoMasks: ["fade-b"]
+    },
 
-                // ════════════════════════════════════════════════════════
-                // MULÈšUMIRE
-                // ════════════════════════════════════════════════════════
-                {
-                    id: "block-thankyou-1",
-                    type: "thankyou",
-                    show: true,
-                    content: "VÄƒ aÈ™teptÄƒm cu drag!",
-                    label: "ESPERAMOS CONTAR CON SU PRESENCIA"
-                }
-
+    // ════════════════════════════════════════════════════════
+    // MULȚUMIRE
+    // ════════════════════════════════════════════════════════
+    {
+        id: "block-thankyou-1",
+        type: "thankyou",
+        show: true,
+        content: "Vă așteptăm cu drag!",
+        label: "ABIA AȘTEPTĂM SĂ FIȚI ALĂTURI DE NOI"
+    }
 
 ]);
 
