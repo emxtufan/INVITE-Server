@@ -68,7 +68,29 @@ const NETOPIA_SIGNATURE = process.env.NETOPIA_SIGNATURE || '';
 const NETOPIA_SANDBOX   = process.env.NETOPIA_SANDBOX !== 'false'; // true by default
 const NETOPIA_PRIVATE_KEY_PATH = process.env.NETOPIA_PRIVATE_KEY_PATH || '';
 const NETOPIA_PUBLIC_CERT_PATH = process.env.NETOPIA_PUBLIC_CERT_PATH || '';
-const APP_URL = (process.env.APP_URL || CLIENT_URL).replace(/\/$/, '');
+const PUBLIC_APP_URL_CANDIDATE =
+  process.env.PUBLIC_APP_URL ||
+  process.env.FRONTEND_URL ||
+  process.env.WEBSITE_URL ||
+  process.env.APP_URL ||
+  CLIENT_URL;
+
+function resolvePublicAppUrl(value = '') {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+
+  try {
+    const parsed = new URL(raw);
+    if (/^api\./i.test(parsed.hostname)) {
+      parsed.hostname = parsed.hostname.replace(/^api\./i, '');
+    }
+    return parsed.toString().replace(/\/$/, '');
+  } catch {
+    return raw.replace(/\/$/, '');
+  }
+}
+
+const APP_URL = resolvePublicAppUrl(PUBLIC_APP_URL_CANDIDATE);
 const FEEDBACK_FORM_URL = `${APP_URL}/feedback`;
 const EMAIL_FEEDBACK_REPLY_DOMAIN = String(process.env.EMAIL_FEEDBACK_REPLY_DOMAIN || '').trim().toLowerCase();
 const EMAIL_FEEDBACK_REPLY_LOCAL_PART = String(process.env.EMAIL_FEEDBACK_REPLY_LOCAL_PART || 'feedback').trim().toLowerCase() || 'feedback';
@@ -2015,12 +2037,29 @@ app.post('/api/webhooks/resend', express.text({ type: 'application/json' }), asy
     const recipientId = String(tags?.recipient_id || '').trim();
 
     if (eventType === 'email.received') {
+      let inboundEmail = null;
+      if (resendClient && eventData?.email_id) {
+        const received = await resendClient.emails.receiving.get(eventData.email_id);
+        if (received?.data && !received?.error) {
+          inboundEmail = received.data;
+        }
+      }
+
       const parsedReply = parseFeedbackReplyAddress(eventData?.to?.[0] || eventData?.to || '');
       const resolvedRecipientId = recipientId || parsedReply?.recipientId || '';
       const resolvedCampaignId = campaignId || parsedReply?.campaignId || '';
       const recipient = resolvedRecipientId
         ? await EmailCampaignRecipient.findById(resolvedRecipientId)
         : null;
+
+      const replyText = String(
+        inboundEmail?.text ||
+          inboundEmail?.html ||
+          eventData?.subject ||
+          '',
+      ).trim();
+      const preview = replyText.replace(/\s+/g, ' ').slice(0, 280);
+
       if (!recipient) {
         if (webhookId) {
           await recordEmailCampaignEvent({
@@ -2030,27 +2069,14 @@ app.post('/api/webhooks/resend', express.text({ type: 'application/json' }), asy
               to: eventData?.to || [],
               from: eventData?.from || '',
               subject: eventData?.subject || '',
+              preview,
+              text: String(inboundEmail?.text || '').slice(0, 8000),
+              html: String(inboundEmail?.html || '').slice(0, 16000),
             },
           });
         }
         return res.status(200).send({ success: true, ignored: true });
       }
-
-      let inboundEmail = null;
-      if (resendClient && eventData?.email_id) {
-        const received = await resendClient.emails.receiving.get(eventData.email_id);
-        if (received?.data && !received?.error) {
-          inboundEmail = received.data;
-        }
-      }
-
-      const replyText = String(
-        inboundEmail?.text ||
-          inboundEmail?.html ||
-          eventData?.subject ||
-          '',
-      ).trim();
-      const preview = replyText.replace(/\s+/g, ' ').slice(0, 280);
       const now = new Date();
 
       recipient.replyCount = Number(recipient.replyCount || 0) + 1;
@@ -2208,6 +2234,15 @@ const buildFeedbackChoiceUrl = (campaignId, recipientId, choice = '') => {
   return url.toString();
 };
 
+const buildDemoFeedbackUrl = (choice = '') => {
+  const url = new URL(FEEDBACK_FORM_URL);
+  url.searchParams.set('demo', '1');
+  if (choice) {
+    url.searchParams.set('choice', String(choice));
+  }
+  return url.toString();
+};
+
 const buildFeedbackReplyToAddress = (campaignId, recipientId) => {
   if (!EMAIL_FEEDBACK_REPLY_DOMAIN) return '';
   const safeCampaignId = String(campaignId || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
@@ -2264,6 +2299,13 @@ const personalizeCampaignHtml = (html = '', { campaignId, recipientId, mergeData
     });
 };
 
+const personalizePreviewFeedbackHtml = (html = '') =>
+  String(html || '')
+    .replace(/\{\{\s*feedbackUrl\s*\}\}/g, buildDemoFeedbackUrl())
+    .replace(/\{\{\s*feedbackUrl:([a-z0-9_-]+)\s*\}\}/gi, (_, choice) =>
+      buildDemoFeedbackUrl(String(choice || '').trim()),
+    );
+
 async function recordEmailCampaignEvent({
   campaignId = null,
   recipientId = null,
@@ -2314,6 +2356,44 @@ async function refreshEmailCampaignStats(campaignId) {
   });
 
   return stats;
+}
+
+function toSafeInboxText(value, maxLength = 16000) {
+  if (typeof value === 'string') return value.slice(0, maxLength);
+  if (value === null || typeof value === 'undefined') return '';
+  return String(value).slice(0, maxLength);
+}
+
+function toSafeInboxList(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => toSafeInboxText(entry, 500))
+      .filter(Boolean)
+      .slice(0, 20);
+  }
+
+  const single = toSafeInboxText(value, 500);
+  return single ? [single] : [];
+}
+
+function normalizeInboxEvent(event = {}) {
+  const meta = event?.meta && typeof event.meta === 'object' ? event.meta : {};
+  return {
+    _id: String(event?._id || ''),
+    campaignId: event?.campaignId ? String(event.campaignId) : '',
+    recipientId: event?.recipientId ? String(event.recipientId) : '',
+    userId: event?.userId ? String(event.userId) : '',
+    type: String(event?.type || ''),
+    createdAt: event?.createdAt || null,
+    meta: {
+      from: toSafeInboxText(meta?.from, 500),
+      to: toSafeInboxList(meta?.to),
+      subject: toSafeInboxText(meta?.subject, 500),
+      preview: toSafeInboxText(meta?.preview, 1000),
+      text: toSafeInboxText(meta?.text, 16000),
+      html: toSafeInboxText(meta?.html, 16000),
+    },
+  };
 }
 
 async function runEmailCampaign(campaignId) {
@@ -4542,7 +4622,7 @@ app.post('/api/admin/email/send-test', authenticateAdmin, async (req, res) => {
             sent = await emailNotifications.sendCustomHtmlEmail({
                 email,
                 subject: customSubject || subject || 'Email custom Esa',
-                html: customHtml || html,
+                html: personalizePreviewFeedbackHtml(customHtml || html),
             });
         } else {
             return res.status(400).send({ error: 'Tip email invalid. Foloseste welcome, login_alert, reminder, product_update sau custom_html.' });
@@ -4643,6 +4723,47 @@ app.get('/api/admin/email/campaigns/:id', authenticateAdmin, async (req, res) =>
         res.send({ success: true, campaign, recipients, events });
     } catch (e) {
         res.status(500).send({ error: e.message });
+    }
+});
+
+app.get('/api/admin/email/inbox', authenticateAdmin, async (req, res) => {
+    try {
+        const query = {
+            type: { $in: ['reply_received', 'received_unmatched'] },
+        };
+        const projection = {
+            _id: 1,
+            campaignId: 1,
+            recipientId: 1,
+            userId: 1,
+            type: 1,
+            meta: 1,
+            createdAt: 1,
+        };
+
+        let rawEvents = [];
+        try {
+            rawEvents = await EmailCampaignEvent.collection
+                .find(query, { projection })
+                .sort({ createdAt: -1 })
+                .limit(100)
+                .toArray();
+        } catch (collectionError) {
+            console.error('[admin/email/inbox] native query failed:', collectionError);
+            rawEvents = await EmailCampaignEvent.find(query)
+                .select('_id campaignId recipientId userId type meta createdAt')
+                .sort({ createdAt: -1 })
+                .limit(100)
+                .lean();
+        }
+
+        const events = Array.isArray(rawEvents)
+            ? rawEvents.map((event) => normalizeInboxEvent(event)).filter(Boolean)
+            : [];
+        res.send({ success: true, events });
+    } catch (e) {
+        console.error('[admin/email/inbox] failed:', e);
+        res.status(500).send({ error: 'Nu am putut incarca inbox-ul de reply-uri.' });
     }
 });
 
