@@ -72,6 +72,26 @@ const sanitizeSubject = (value = "") =>
     .trim()
     .slice(0, 140);
 
+const htmlToPlainText = (value = "") =>
+  String(value || "")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|li|tr|h1|h2|h3|h4|h5|h6|section)>/gi, "\n")
+    .replace(/<li[^>]*>/gi, "- ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/\r/g, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+
 const EMAIL_THEMES = {
   slate: {
     pageBg: "#f4f4f5",
@@ -251,6 +271,7 @@ export function createEmailNotifications({
     to,
     subject,
     html,
+    text = "",
     attachments = [],
     replyTo = "",
     headers = {},
@@ -266,6 +287,7 @@ export function createEmailNotifications({
         to: [to],
         subject,
         html,
+        text: String(text || "").trim() || htmlToPlainText(html),
       };
       if (Array.isArray(attachments) && attachments.length) {
         payload.attachments = attachments;
@@ -889,6 +911,7 @@ export function createEmailNotifications({
     email,
     subject = "",
     html = "",
+    text = "",
     attachments = [],
     replyTo = "",
     headers = {},
@@ -904,6 +927,7 @@ export function createEmailNotifications({
       to: email,
       subject: safeSubject,
       html: safeHtml,
+      text: String(text || "").trim(),
       attachments,
       replyTo: String(replyTo || "").trim(),
       headers,

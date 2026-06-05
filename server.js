@@ -74,6 +74,12 @@ const PUBLIC_APP_URL_CANDIDATE =
   process.env.WEBSITE_URL ||
   process.env.APP_URL ||
   CLIENT_URL;
+const PUBLIC_API_URL_CANDIDATE =
+  process.env.PUBLIC_API_URL ||
+  process.env.API_URL ||
+  process.env.BACKEND_URL ||
+  CLIENT_URL ||
+  'https://api.event-smart-assistant.com';
 
 function resolvePublicAppUrl(value = '') {
   const raw = String(value || '').trim();
@@ -90,7 +96,23 @@ function resolvePublicAppUrl(value = '') {
   }
 }
 
+function resolveApiBaseUrl(value = '') {
+  const raw = String(value || '').trim();
+  if (!raw) return 'https://api.event-smart-assistant.com';
+
+  try {
+    const parsed = new URL(raw);
+    if (!/^api\./i.test(parsed.hostname) && /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(parsed.hostname)) {
+      parsed.hostname = `api.${parsed.hostname.replace(/^www\./i, '')}`;
+    }
+    return parsed.toString().replace(/\/$/, '');
+  } catch {
+    return raw.replace(/\/$/, '');
+  }
+}
+
 const APP_URL = resolvePublicAppUrl(PUBLIC_APP_URL_CANDIDATE);
+const API_BASE_URL = resolveApiBaseUrl(PUBLIC_API_URL_CANDIDATE);
 const FEEDBACK_FORM_URL = `${APP_URL}/feedback`;
 const EMAIL_FEEDBACK_REPLY_DOMAIN = String(process.env.EMAIL_FEEDBACK_REPLY_DOMAIN || '').trim().toLowerCase();
 const EMAIL_FEEDBACK_REPLY_LOCAL_PART = String(process.env.EMAIL_FEEDBACK_REPLY_LOCAL_PART || 'feedback').trim().toLowerCase() || 'feedback';
@@ -401,6 +423,11 @@ const UserSchema = new mongoose.Schema({
     lastSentAt: Date,
     lastIp: String,
     lastUserAgent: String,
+  },
+  emailPreferences: {
+    feedbackOptOutAt: Date,
+    feedbackOptOutSource: String,
+    feedbackOptOutCampaignId: { type: mongoose.Schema.Types.ObjectId, ref: 'EmailCampaign' },
   },
   notifications: [{
     title: String,
@@ -2234,12 +2261,42 @@ const buildFeedbackChoiceUrl = (campaignId, recipientId, choice = '') => {
   return url.toString();
 };
 
+const buildFeedbackUnsubscribeToken = (campaignId, recipientId) =>
+  crypto
+    .createHmac('sha256', String(JWT_SECRET || 'feedback-unsubscribe'))
+    .update(`${String(campaignId || '')}:${String(recipientId || '')}`)
+    .digest('hex');
+
+const buildFeedbackUnsubscribeUrl = (campaignId, recipientId) => {
+  const url = new URL(FEEDBACK_FORM_URL);
+  url.searchParams.set('campaign', String(campaignId));
+  url.searchParams.set('recipient', String(recipientId));
+  url.searchParams.set('unsubscribe', '1');
+  url.searchParams.set('token', buildFeedbackUnsubscribeToken(campaignId, recipientId));
+  return url.toString();
+};
+
+const buildFeedbackUnsubscribeApiUrl = (campaignId, recipientId) => {
+  const url = new URL(`${API_BASE_URL}/api/email-feedback/unsubscribe`);
+  url.searchParams.set('campaign', String(campaignId));
+  url.searchParams.set('recipient', String(recipientId));
+  url.searchParams.set('token', buildFeedbackUnsubscribeToken(campaignId, recipientId));
+  return url.toString();
+};
+
 const buildDemoFeedbackUrl = (choice = '') => {
   const url = new URL(FEEDBACK_FORM_URL);
   url.searchParams.set('demo', '1');
   if (choice) {
     url.searchParams.set('choice', String(choice));
   }
+  return url.toString();
+};
+
+const buildDemoUnsubscribeUrl = () => {
+  const url = new URL(FEEDBACK_FORM_URL);
+  url.searchParams.set('demo', '1');
+  url.searchParams.set('unsubscribe', '1');
   return url.toString();
 };
 
@@ -2282,15 +2339,19 @@ const personalizeCampaignText = (template = '', mergeData = {}) => {
 const personalizeCampaignHtml = (html = '', { campaignId, recipientId, mergeData = {} } = {}) => {
   const withMergeFields = personalizeCampaignText(html, mergeData);
   const fullFeedbackUrl = buildFeedbackChoiceUrl(campaignId, recipientId);
+  const unsubscribeUrl = buildFeedbackUnsubscribeUrl(campaignId, recipientId);
 
   return withMergeFields
     .replace(/\{\{\s*feedbackUrl\s*\}\}/g, fullFeedbackUrl)
     .replace(/\{\{\s*feedbackUrl:([a-z0-9_-]+)\s*\}\}/gi, (_, choice) =>
       buildFeedbackChoiceUrl(campaignId, recipientId, String(choice || '').trim()),
     )
+    .replace(/\{\{\s*unsubscribeUrl\s*\}\}/g, unsubscribeUrl)
     .replace(/https?:\/\/[^"'\s>]+\/feedback(?:\?[^"'\s>]*)?/gi, (match) => {
       try {
         const parsed = new URL(match);
+        const shouldUnsubscribe = parsed.searchParams.get('unsubscribe') === '1';
+        if (shouldUnsubscribe) return unsubscribeUrl;
         const choice = parsed.searchParams.get('r') || parsed.searchParams.get('choice') || '';
         return buildFeedbackChoiceUrl(campaignId, recipientId, choice);
       } catch {
@@ -2304,7 +2365,28 @@ const personalizePreviewFeedbackHtml = (html = '') =>
     .replace(/\{\{\s*feedbackUrl\s*\}\}/g, buildDemoFeedbackUrl())
     .replace(/\{\{\s*feedbackUrl:([a-z0-9_-]+)\s*\}\}/gi, (_, choice) =>
       buildDemoFeedbackUrl(String(choice || '').trim()),
-    );
+    )
+    .replace(/\{\{\s*unsubscribeUrl\s*\}\}/g, buildDemoUnsubscribeUrl());
+
+const htmlToPlainText = (html = '') =>
+  String(html || '')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|li|tr|h1|h2|h3|h4|h5|h6|section)>/gi, '\n')
+    .replace(/<li[^>]*>/gi, '- ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/\r/g, '')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
 
 async function recordEmailCampaignEvent({
   campaignId = null,
@@ -2432,15 +2514,22 @@ async function runEmailCampaign(campaignId) {
 
       const mergeData = recipient.mergeData || {};
       const replyTo = buildFeedbackReplyToAddress(campaign._id, recipient._id);
+      const personalizedHtml = personalizeCampaignHtml(campaign.html, {
+        campaignId: campaign._id,
+        recipientId: recipient._id,
+        mergeData,
+      });
+      const unsubscribeApiUrl = buildFeedbackUnsubscribeApiUrl(campaign._id, recipient._id);
       const sendResult = await emailNotifications.sendRawEmail({
         email: recipient.email,
         subject: personalizeCampaignText(campaign.subject, mergeData),
-        html: personalizeCampaignHtml(campaign.html, {
-          campaignId: campaign._id,
-          recipientId: recipient._id,
-          mergeData,
-        }),
+        html: personalizedHtml,
+        text: htmlToPlainText(personalizedHtml),
         replyTo,
+        headers: {
+          'List-Unsubscribe': `<${unsubscribeApiUrl}>`,
+          'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+        },
         tags: [
           { name: 'campaign_id', value: String(campaign._id) },
           { name: 'recipient_id', value: String(recipient._id) },
@@ -4792,8 +4881,10 @@ app.post('/api/admin/email/campaigns/send', authenticateAdmin, async (req, res) 
             return res.status(400).send({ error: 'Selecteaza cel putin un utilizator.' });
         }
 
-        const query = {};
-        query._id = { $in: selectedUserIds.map((value) => new mongoose.Types.ObjectId(value)) };
+        const query = {
+            _id: { $in: selectedUserIds.map((value) => new mongoose.Types.ObjectId(value)) },
+            'emailPreferences.feedbackOptOutAt': { $exists: false },
+        };
 
         const users = await User.find(query, 'user profile plan payments emailVerified')
             .sort({ createdAt: -1 })
@@ -4917,6 +5008,60 @@ app.get('/api/email-feedback/form', async (req, res) => {
         res.status(500).send({ error: e.message });
     }
 });
+
+const handleFeedbackUnsubscribe = async (req, res) => {
+    try {
+        const payload = req.method === 'POST'
+            ? { ...(req.query || {}), ...(req.body || {}) }
+            : (req.query || {});
+        const campaignId = toObjectIdOrNull(payload?.campaign);
+        const recipientId = toObjectIdOrNull(payload?.recipient);
+        const token = String(payload?.token || '').trim().toLowerCase();
+
+        if (!campaignId || !recipientId || !token) {
+            return res.status(400).send({ error: 'Linkul de dezabonare este invalid.' });
+        }
+
+        const expectedToken = buildFeedbackUnsubscribeToken(campaignId, recipientId);
+        if (token !== expectedToken) {
+            return res.status(400).send({ error: 'Tokenul de dezabonare este invalid.' });
+        }
+
+        const recipient = await EmailCampaignRecipient.findOne({ _id: recipientId, campaignId });
+        if (!recipient) {
+            return res.status(404).send({ error: 'Destinatarul nu exista.' });
+        }
+
+        const now = new Date();
+        await User.findByIdAndUpdate(recipient.userId, {
+            $set: {
+                'emailPreferences.feedbackOptOutAt': now,
+                'emailPreferences.feedbackOptOutSource': 'feedback_campaign',
+                'emailPreferences.feedbackOptOutCampaignId': recipient.campaignId,
+            },
+        });
+
+        await recordEmailCampaignEvent({
+            campaignId: recipient.campaignId,
+            recipientId: recipient._id,
+            userId: recipient.userId,
+            type: 'unsubscribed',
+            meta: {
+                email: recipient.email,
+                source: 'feedback_campaign',
+                ip: String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '').slice(0, 160),
+                userAgent: String(req.headers['user-agent'] || '').slice(0, 280),
+            },
+        });
+
+        res.send({ success: true });
+    } catch (e) {
+        res.status(500).send({ error: e.message });
+    }
+};
+
+app.get('/api/email-feedback/unsubscribe', handleFeedbackUnsubscribe);
+app.post('/api/email-feedback/unsubscribe', handleFeedbackUnsubscribe);
 
 app.post('/api/email-feedback/visit', async (req, res) => {
     try {
