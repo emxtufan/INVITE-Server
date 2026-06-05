@@ -19,6 +19,7 @@ import crypto from 'crypto';
 import { Builder, Parser } from 'xml2js';
 import forge from 'node-forge';
 import PDFDocument from 'pdfkit';
+import { Resend } from 'resend';
 import { createEmailNotifications } from './emailNotifications.js';
 import {
   createSmartbillInvoiceFlow,
@@ -48,6 +49,7 @@ const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
 const CLIENT_URL = process.env.CLIENT_URL || 'https://api.event-smart-assistant.com';
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const RESEND_FROM = process.env.RESEND_FROM || 'ESA Notify <support@event-smart-assistant.com>';
+const RESEND_WEBHOOK_SECRET = process.env.RESEND_WEBHOOK_SECRET || '';
 const EMAIL_OTP_TTL_MINUTES = Number(process.env.EMAIL_OTP_TTL_MINUTES || 10);
 const EMAIL_OTP_COOLDOWN_SECONDS = Number(process.env.EMAIL_OTP_COOLDOWN_SECONDS || 60);
 const EMAIL_OTP_MAX_ATTEMPTS = Number(process.env.EMAIL_OTP_MAX_ATTEMPTS || 5);
@@ -67,6 +69,9 @@ const NETOPIA_SANDBOX   = process.env.NETOPIA_SANDBOX !== 'false'; // true by de
 const NETOPIA_PRIVATE_KEY_PATH = process.env.NETOPIA_PRIVATE_KEY_PATH || '';
 const NETOPIA_PUBLIC_CERT_PATH = process.env.NETOPIA_PUBLIC_CERT_PATH || '';
 const APP_URL = (process.env.APP_URL || CLIENT_URL).replace(/\/$/, '');
+const FEEDBACK_FORM_URL = `${APP_URL}/feedback`;
+const EMAIL_FEEDBACK_REPLY_DOMAIN = String(process.env.EMAIL_FEEDBACK_REPLY_DOMAIN || '').trim().toLowerCase();
+const EMAIL_FEEDBACK_REPLY_LOCAL_PART = String(process.env.EMAIL_FEEDBACK_REPLY_LOCAL_PART || 'feedback').trim().toLowerCase() || 'feedback';
 
 function resolveNetopiaFilePath(candidates = []) {
   for (const candidate of candidates) {
@@ -132,6 +137,7 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '780198284819-p7hf7nqag
 
 const stripe = new Stripe(STRIPE_SECRET_KEY);
 const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
+const resendClient = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
 const DEFAULT_EMAIL_APP_NAME = 'Event Smart Assistant';
 const emailNotifications = createEmailNotifications({
   apiKey: RESEND_API_KEY,
@@ -615,6 +621,101 @@ const ServiceRequestSchema = new mongoose.Schema({
   createdAt:       { type: Date, default: Date.now },
 });
 const ServiceRequest = mongoose.model('ServiceRequest', ServiceRequestSchema);
+
+const EmailCampaignSchema = new mongoose.Schema({
+  title: { type: String, required: true },
+  subject: { type: String, required: true },
+  preheader: { type: String, default: '' },
+  html: { type: String, required: true },
+  status: {
+    type: String,
+    enum: ['draft', 'queued', 'sending', 'sent', 'partial', 'failed'],
+    default: 'draft',
+  },
+  createdBy: { type: String, default: 'admin' },
+  startedAt: Date,
+  finishedAt: Date,
+  lastError: { type: String, default: '' },
+  fromAddress: { type: String, default: RESEND_FROM },
+  replyDomain: { type: String, default: EMAIL_FEEDBACK_REPLY_DOMAIN },
+  replyLocalPart: { type: String, default: EMAIL_FEEDBACK_REPLY_LOCAL_PART },
+  feedbackFormUrl: { type: String, default: FEEDBACK_FORM_URL },
+  filters: {
+    onlyWithoutPayments: { type: Boolean, default: true },
+    onlyFreePlan: { type: Boolean, default: false },
+    onlyVerified: { type: Boolean, default: true },
+    excludeAdmins: { type: Boolean, default: true },
+    limit: { type: Number, default: 200 },
+  },
+  stats: {
+    recipientsTotal: { type: Number, default: 0 },
+    pending: { type: Number, default: 0 },
+    sent: { type: Number, default: 0 },
+    failed: { type: Number, default: 0 },
+    delivered: { type: Number, default: 0 },
+    opened: { type: Number, default: 0 },
+    clicked: { type: Number, default: 0 },
+    visited: { type: Number, default: 0 },
+    submitted: { type: Number, default: 0 },
+    replied: { type: Number, default: 0 },
+  },
+  settings: {
+    pauseMs: { type: Number, default: 2500 },
+  },
+}, { timestamps: true });
+
+const EmailCampaignRecipientSchema = new mongoose.Schema({
+  campaignId: { type: mongoose.Schema.Types.ObjectId, ref: 'EmailCampaign', required: true, index: true },
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  sendIndex: { type: Number, default: 0 },
+  email: { type: String, required: true, index: true },
+  name: { type: String, default: '' },
+  mergeData: { type: Object, default: {} },
+  status: {
+    type: String,
+    enum: ['pending', 'sent', 'failed', 'skipped'],
+    default: 'pending',
+  },
+  emailId: { type: String, default: '', index: true },
+  replyTo: { type: String, default: '' },
+  sentAt: Date,
+  deliveredAt: Date,
+  openedAt: Date,
+  clickedAt: Date,
+  bouncedAt: Date,
+  complainedAt: Date,
+  failedAt: Date,
+  errorMessage: { type: String, default: '' },
+  visitCount: { type: Number, default: 0 },
+  firstVisitedAt: Date,
+  lastVisitedAt: Date,
+  answerChoice: { type: String, default: '' },
+  answerText: { type: String, default: '' },
+  formSubmittedAt: Date,
+  replyCount: { type: Number, default: 0 },
+  lastReplyAt: Date,
+  lastReplyPreview: { type: String, default: '' },
+  lastEventAt: Date,
+}, { timestamps: true });
+
+EmailCampaignRecipientSchema.index({ campaignId: 1, email: 1 }, { unique: true });
+
+const EmailCampaignEventSchema = new mongoose.Schema({
+  campaignId: { type: mongoose.Schema.Types.ObjectId, ref: 'EmailCampaign', index: true },
+  recipientId: { type: mongoose.Schema.Types.ObjectId, ref: 'EmailCampaignRecipient', index: true },
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
+  emailId: { type: String, default: '', index: true },
+  webhookId: { type: String, index: true },
+  type: { type: String, required: true, index: true },
+  meta: { type: Object, default: {} },
+  createdAt: { type: Date, default: Date.now, index: true },
+});
+
+EmailCampaignEventSchema.index({ webhookId: 1 }, { unique: true, sparse: true });
+
+const EmailCampaign = mongoose.model('EmailCampaign', EmailCampaignSchema);
+const EmailCampaignRecipient = mongoose.model('EmailCampaignRecipient', EmailCampaignRecipientSchema);
+const EmailCampaignEvent = mongoose.model('EmailCampaignEvent', EmailCampaignEventSchema);
 
 const PLAN_RANK = { free: 0, basic: 1, premium: 2 };
 
@@ -1879,6 +1980,165 @@ const WEDDING_DEFAULT_BLOCKS = JSON.stringify([
 
 ]);
 
+app.post('/api/webhooks/resend', express.text({ type: 'application/json' }), async (req, res) => {
+  const rawPayload = typeof req.body === 'string' ? req.body : JSON.stringify(req.body || {});
+  const webhookHeaders = {
+    id: String(req.headers['svix-id'] || ''),
+    timestamp: String(req.headers['svix-timestamp'] || ''),
+    signature: String(req.headers['svix-signature'] || ''),
+  };
+
+  try {
+    let event = null;
+    if (resendClient && RESEND_WEBHOOK_SECRET && webhookHeaders.id && webhookHeaders.timestamp && webhookHeaders.signature) {
+      event = resendClient.webhooks.verify({
+        payload: rawPayload,
+        headers: webhookHeaders,
+        webhookSecret: RESEND_WEBHOOK_SECRET,
+      });
+    } else {
+      event = JSON.parse(rawPayload || '{}');
+    }
+
+    const webhookId = webhookHeaders.id || '';
+    if (webhookId) {
+      const alreadyHandled = await EmailCampaignEvent.findOne({ webhookId }).lean();
+      if (alreadyHandled) {
+        return res.status(200).send({ success: true, duplicate: true });
+      }
+    }
+
+    const eventType = String(event?.type || '').trim();
+    const eventData = event?.data || {};
+    const tags = eventData?.tags || {};
+    const campaignId = String(tags?.campaign_id || '').trim();
+    const recipientId = String(tags?.recipient_id || '').trim();
+
+    if (eventType === 'email.received') {
+      const parsedReply = parseFeedbackReplyAddress(eventData?.to?.[0] || eventData?.to || '');
+      const resolvedRecipientId = recipientId || parsedReply?.recipientId || '';
+      const resolvedCampaignId = campaignId || parsedReply?.campaignId || '';
+      const recipient = resolvedRecipientId
+        ? await EmailCampaignRecipient.findById(resolvedRecipientId)
+        : null;
+      if (!recipient) {
+        if (webhookId) {
+          await recordEmailCampaignEvent({
+            webhookId,
+            type: 'received_unmatched',
+            meta: {
+              to: eventData?.to || [],
+              from: eventData?.from || '',
+              subject: eventData?.subject || '',
+            },
+          });
+        }
+        return res.status(200).send({ success: true, ignored: true });
+      }
+
+      let inboundEmail = null;
+      if (resendClient && eventData?.email_id) {
+        const received = await resendClient.emails.receiving.get(eventData.email_id);
+        if (received?.data && !received?.error) {
+          inboundEmail = received.data;
+        }
+      }
+
+      const replyText = String(
+        inboundEmail?.text ||
+          inboundEmail?.html ||
+          eventData?.subject ||
+          '',
+      ).trim();
+      const preview = replyText.replace(/\s+/g, ' ').slice(0, 280);
+      const now = new Date();
+
+      recipient.replyCount = Number(recipient.replyCount || 0) + 1;
+      recipient.lastReplyAt = now;
+      recipient.lastReplyPreview = preview;
+      recipient.lastEventAt = now;
+      await recipient.save();
+
+      await recordEmailCampaignEvent({
+        campaignId: recipient.campaignId,
+        recipientId: recipient._id,
+        userId: recipient.userId,
+        emailId: String(eventData?.email_id || ''),
+        webhookId,
+        type: 'reply_received',
+        meta: {
+          campaignId: resolvedCampaignId,
+          from: eventData?.from || '',
+          to: eventData?.to || [],
+          subject: eventData?.subject || '',
+          preview,
+          text: String(inboundEmail?.text || '').slice(0, 8000),
+          html: String(inboundEmail?.html || '').slice(0, 16000),
+        },
+      });
+
+      await refreshEmailCampaignStats(recipient.campaignId);
+      return res.status(200).send({ success: true });
+    }
+
+    const recipientLookup =
+      (recipientId && await EmailCampaignRecipient.findById(recipientId)) ||
+      (eventData?.email_id ? await EmailCampaignRecipient.findOne({ emailId: String(eventData.email_id) }) : null);
+
+    if (!recipientLookup) {
+      if (webhookId) {
+        await recordEmailCampaignEvent({
+          webhookId,
+          type: `${eventType || 'unknown'}_unmatched`,
+          meta: {
+            emailId: String(eventData?.email_id || ''),
+            tags,
+          },
+        });
+      }
+      return res.status(200).send({ success: true, ignored: true });
+    }
+
+    const now = event?.created_at ? new Date(event.created_at) : new Date();
+    const recipientUpdate = {
+      lastEventAt: now,
+    };
+
+    if (eventType === 'email.delivered') recipientUpdate.deliveredAt = now;
+    if (eventType === 'email.opened') recipientUpdate.openedAt = now;
+    if (eventType === 'email.clicked') recipientUpdate.clickedAt = now;
+    if (eventType === 'email.bounced') recipientUpdate.bouncedAt = now;
+    if (eventType === 'email.complained') recipientUpdate.complainedAt = now;
+    if (eventType === 'email.failed') {
+      recipientUpdate.failedAt = now;
+      recipientUpdate.status = 'failed';
+      recipientUpdate.errorMessage = String(eventData?.error || 'email_failed');
+    }
+
+    await EmailCampaignRecipient.findByIdAndUpdate(recipientLookup._id, { $set: recipientUpdate });
+    await recordEmailCampaignEvent({
+      campaignId: recipientLookup.campaignId,
+      recipientId: recipientLookup._id,
+      userId: recipientLookup.userId,
+      emailId: String(eventData?.email_id || recipientLookup.emailId || ''),
+      webhookId,
+      type: eventType || 'unknown',
+      meta: {
+        from: eventData?.from || '',
+        to: eventData?.to || [],
+        subject: eventData?.subject || '',
+        tags,
+      },
+    });
+    await refreshEmailCampaignStats(recipientLookup.campaignId);
+
+    return res.status(200).send({ success: true });
+  } catch (error) {
+    console.error('[RESEND WEBHOOK] error:', error);
+    return res.status(400).send({ error: 'Invalid webhook payload.' });
+  }
+});
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
@@ -1914,6 +2174,262 @@ const computeDaysUntilDate = (dateValue) => {
   now.setHours(12, 0, 0, 0);
   return Math.round((target.getTime() - now.getTime()) / 86400000);
 };
+
+const activeEmailCampaignRuns = new Set();
+
+const sleep = (ms = 0) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+
+const maskEmailAddress = (value = '') => {
+  const email = normalizeEmail(value);
+  const [localPart, domain] = email.split('@');
+  if (!localPart || !domain) return email;
+  if (localPart.length <= 2) return `${localPart[0] || '*'}*@${domain}`;
+  return `${localPart.slice(0, 2)}***@${domain}`;
+};
+
+const toObjectIdOrNull = (value = '') => {
+  const raw = String(value || '').trim();
+  return mongoose.Types.ObjectId.isValid(raw) ? new mongoose.Types.ObjectId(raw) : null;
+};
+
+const extractEmailAddress = (value = '') => {
+  const raw = String(value || '').trim();
+  const match = raw.match(/<([^>]+)>/);
+  return normalizeEmail(match ? match[1] : raw);
+};
+
+const buildFeedbackChoiceUrl = (campaignId, recipientId, choice = '') => {
+  const url = new URL(FEEDBACK_FORM_URL);
+  url.searchParams.set('campaign', String(campaignId));
+  url.searchParams.set('recipient', String(recipientId));
+  if (choice) {
+    url.searchParams.set('choice', String(choice));
+  }
+  return url.toString();
+};
+
+const buildFeedbackReplyToAddress = (campaignId, recipientId) => {
+  if (!EMAIL_FEEDBACK_REPLY_DOMAIN) return '';
+  const safeCampaignId = String(campaignId || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+  const safeRecipientId = String(recipientId || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+  if (!safeCampaignId || !safeRecipientId) return '';
+  return `${EMAIL_FEEDBACK_REPLY_LOCAL_PART}+${safeCampaignId}.${safeRecipientId}@${EMAIL_FEEDBACK_REPLY_DOMAIN}`;
+};
+
+const parseFeedbackReplyAddress = (value = '') => {
+  const email = extractEmailAddress(value);
+  const [localPart, domain] = email.split('@');
+  if (!localPart || !domain) return null;
+  if (EMAIL_FEEDBACK_REPLY_DOMAIN && domain !== EMAIL_FEEDBACK_REPLY_DOMAIN) return null;
+  const prefix = `${EMAIL_FEEDBACK_REPLY_LOCAL_PART}+`;
+  if (!localPart.startsWith(prefix)) return null;
+  const encoded = localPart.slice(prefix.length);
+  const [campaignId, recipientId] = encoded.split('.');
+  if (!campaignId || !recipientId) return null;
+  return { campaignId, recipientId };
+};
+
+const personalizeCampaignText = (template = '', mergeData = {}) => {
+  const replacements = {
+    firstName: String(mergeData?.firstName || '').trim(),
+    lastName: String(mergeData?.lastName || '').trim(),
+    fullName: String(mergeData?.fullName || '').trim(),
+    email: String(mergeData?.email || '').trim(),
+    eventName: String(mergeData?.eventName || '').trim(),
+    eventType: String(mergeData?.eventType || '').trim(),
+  };
+
+  return String(template || '').replace(/\{\{\s*(firstName|lastName|fullName|email|eventName|eventType)\s*\}\}/g, (_, key) =>
+    replacements[key] || '',
+  );
+};
+
+const personalizeCampaignHtml = (html = '', { campaignId, recipientId, mergeData = {} } = {}) => {
+  const withMergeFields = personalizeCampaignText(html, mergeData);
+  const fullFeedbackUrl = buildFeedbackChoiceUrl(campaignId, recipientId);
+
+  return withMergeFields
+    .replace(/\{\{\s*feedbackUrl\s*\}\}/g, fullFeedbackUrl)
+    .replace(/\{\{\s*feedbackUrl:([a-z0-9_-]+)\s*\}\}/gi, (_, choice) =>
+      buildFeedbackChoiceUrl(campaignId, recipientId, String(choice || '').trim()),
+    )
+    .replace(/https?:\/\/[^"'\s>]+\/feedback(?:\?[^"'\s>]*)?/gi, (match) => {
+      try {
+        const parsed = new URL(match);
+        const choice = parsed.searchParams.get('r') || parsed.searchParams.get('choice') || '';
+        return buildFeedbackChoiceUrl(campaignId, recipientId, choice);
+      } catch {
+        return fullFeedbackUrl;
+      }
+    });
+};
+
+async function recordEmailCampaignEvent({
+  campaignId = null,
+  recipientId = null,
+  userId = null,
+  emailId = '',
+  webhookId = '',
+  type = '',
+  meta = {},
+} = {}) {
+  const normalizedType = String(type || '').trim();
+  if (!normalizedType) return null;
+  try {
+    return await EmailCampaignEvent.create({
+      campaignId: campaignId || undefined,
+      recipientId: recipientId || undefined,
+      userId: userId || undefined,
+      emailId: String(emailId || '').trim(),
+      webhookId: String(webhookId || '').trim() || undefined,
+      type: normalizedType,
+      meta,
+    });
+  } catch (error) {
+    if (error?.code === 11000 && webhookId) return null;
+    throw error;
+  }
+}
+
+async function refreshEmailCampaignStats(campaignId) {
+  const campaignObjectId = toObjectIdOrNull(campaignId);
+  if (!campaignObjectId) return null;
+
+  const recipients = await EmailCampaignRecipient.find({ campaignId: campaignObjectId }).lean();
+  const stats = {
+    recipientsTotal: recipients.length,
+    pending: recipients.filter((item) => item.status === 'pending').length,
+    sent: recipients.filter((item) => item.status === 'sent').length,
+    failed: recipients.filter((item) => item.status === 'failed').length,
+    delivered: recipients.filter((item) => Boolean(item.deliveredAt)).length,
+    opened: recipients.filter((item) => Boolean(item.openedAt)).length,
+    clicked: recipients.filter((item) => Boolean(item.clickedAt)).length,
+    visited: recipients.filter((item) => Number(item.visitCount || 0) > 0).length,
+    submitted: recipients.filter((item) => Boolean(item.formSubmittedAt)).length,
+    replied: recipients.filter((item) => Number(item.replyCount || 0) > 0).length,
+  };
+
+  await EmailCampaign.findByIdAndUpdate(campaignObjectId, {
+    $set: { stats },
+  });
+
+  return stats;
+}
+
+async function runEmailCampaign(campaignId) {
+  const campaignKey = String(campaignId || '').trim();
+  if (!campaignKey || activeEmailCampaignRuns.has(campaignKey)) return;
+
+  activeEmailCampaignRuns.add(campaignKey);
+
+  try {
+    const campaign = await EmailCampaign.findById(campaignKey);
+    if (!campaign) return;
+    if (!emailNotifications.isEnabled) {
+      campaign.status = 'failed';
+      campaign.lastError = 'RESEND_API_KEY lipsa. Campania nu poate fi trimisa.';
+      campaign.finishedAt = new Date();
+      await campaign.save();
+      return;
+    }
+
+    campaign.status = 'sending';
+    campaign.startedAt = campaign.startedAt || new Date();
+    campaign.lastError = '';
+    await campaign.save();
+
+    const recipients = await EmailCampaignRecipient.find({
+      campaignId: campaign._id,
+      status: 'pending',
+    }).sort({ sendIndex: 1 });
+
+    let attempted = 0;
+    for (const recipient of recipients) {
+      if (attempted > 0 && Number(campaign.settings?.pauseMs || 0) > 0) {
+        await sleep(Number(campaign.settings.pauseMs || 0));
+      }
+      attempted += 1;
+
+      const mergeData = recipient.mergeData || {};
+      const replyTo = buildFeedbackReplyToAddress(campaign._id, recipient._id);
+      const sendResult = await emailNotifications.sendRawEmail({
+        email: recipient.email,
+        subject: personalizeCampaignText(campaign.subject, mergeData),
+        html: personalizeCampaignHtml(campaign.html, {
+          campaignId: campaign._id,
+          recipientId: recipient._id,
+          mergeData,
+        }),
+        replyTo,
+        tags: [
+          { name: 'campaign_id', value: String(campaign._id) },
+          { name: 'recipient_id', value: String(recipient._id) },
+          { name: 'campaign_kind', value: 'feedback' },
+        ],
+      });
+
+      const now = new Date();
+      if (sendResult?.success) {
+        recipient.status = 'sent';
+        recipient.emailId = String(sendResult.id || '').trim();
+        recipient.replyTo = replyTo;
+        recipient.sentAt = now;
+        recipient.lastEventAt = now;
+        recipient.errorMessage = '';
+        await recipient.save();
+
+        await recordEmailCampaignEvent({
+          campaignId: campaign._id,
+          recipientId: recipient._id,
+          userId: recipient.userId,
+          emailId: recipient.emailId,
+          type: 'sent',
+          meta: {
+            email: recipient.email,
+            replyTo,
+          },
+        });
+      } else {
+        recipient.status = 'failed';
+        recipient.failedAt = now;
+        recipient.lastEventAt = now;
+        recipient.errorMessage = String(sendResult?.error || 'send_failed');
+        await recipient.save();
+
+        await recordEmailCampaignEvent({
+          campaignId: campaign._id,
+          recipientId: recipient._id,
+          userId: recipient.userId,
+          type: 'failed',
+          meta: {
+            email: recipient.email,
+            error: recipient.errorMessage,
+          },
+        });
+      }
+    }
+
+    const stats = await refreshEmailCampaignStats(campaign._id);
+    const hasFailures = Number(stats?.failed || 0) > 0;
+    const hasSuccess = Number(stats?.sent || 0) > 0;
+    campaign.status = hasSuccess ? (hasFailures ? 'partial' : 'sent') : 'failed';
+    campaign.finishedAt = new Date();
+    campaign.lastError = hasSuccess ? '' : (campaign.lastError || 'Campania nu a putut fi trimisa.');
+    await campaign.save();
+  } catch (error) {
+    console.error('[EMAIL CAMPAIGN] run failed:', error);
+    await EmailCampaign.findByIdAndUpdate(campaignKey, {
+      $set: {
+        status: 'failed',
+        finishedAt: new Date(),
+        lastError: String(error?.message || 'email_campaign_failed'),
+      },
+    });
+  } finally {
+    await refreshEmailCampaignStats(campaignKey).catch(() => null);
+    activeEmailCampaignRuns.delete(campaignKey);
+  }
+}
 
 async function pushUserNotification(userId, payload = {}) {
   const title = String(payload.title || '').trim();
@@ -3957,6 +4473,10 @@ app.get('/api/admin/email/status', authenticateAdmin, async (req, res) => {
         enabled: emailNotifications.isEnabled,
         provider: 'resend',
         from: RESEND_FROM,
+        resendWebhookConfigured: Boolean(RESEND_WEBHOOK_SECRET),
+        feedbackReplyDomain: EMAIL_FEEDBACK_REPLY_DOMAIN,
+        feedbackReplyConfigured: Boolean(EMAIL_FEEDBACK_REPLY_DOMAIN),
+        feedbackFormUrl: FEEDBACK_FORM_URL,
         loginAlertsEnabled: EMAIL_LOGIN_ALERT_ENABLED,
         loginAlertCooldownMinutes: EMAIL_LOGIN_ALERT_COOLDOWN_MINUTES,
         loginAlertSkipNewAccountMinutes: EMAIL_LOGIN_ALERT_SKIP_NEW_ACCOUNT_MINUTES,
@@ -4093,6 +4613,286 @@ app.post('/api/admin/email/send-reminders', authenticateAdmin, async (req, res) 
         });
     } catch (e) {
         return res.status(500).send({ error: e.message });
+    }
+});
+
+app.get('/api/admin/email/campaigns', authenticateAdmin, async (req, res) => {
+    try {
+        const campaigns = await EmailCampaign.find({})
+            .sort({ createdAt: -1 })
+            .limit(20)
+            .lean();
+        res.send({ success: true, campaigns });
+    } catch (e) {
+        res.status(500).send({ error: e.message });
+    }
+});
+
+app.get('/api/admin/email/campaigns/:id', authenticateAdmin, async (req, res) => {
+    try {
+        const campaignId = toObjectIdOrNull(req.params.id);
+        if (!campaignId) return res.status(400).send({ error: 'Campanie invalida.' });
+
+        const [campaign, recipients, events] = await Promise.all([
+            EmailCampaign.findById(campaignId).lean(),
+            EmailCampaignRecipient.find({ campaignId }).sort({ sendIndex: 1 }).lean(),
+            EmailCampaignEvent.find({ campaignId }).sort({ createdAt: -1 }).limit(100).lean(),
+        ]);
+
+        if (!campaign) return res.status(404).send({ error: 'Campanie inexistenta.' });
+        res.send({ success: true, campaign, recipients, events });
+    } catch (e) {
+        res.status(500).send({ error: e.message });
+    }
+});
+
+app.post('/api/admin/email/campaigns/send', authenticateAdmin, async (req, res) => {
+    try {
+        const title = String(req.body?.title || '').trim() || 'Campanie feedback clienti';
+        const subject = String(req.body?.subject || '').trim();
+        const preheader = String(req.body?.preheader || '').trim();
+        const html = String(req.body?.html || '').trim();
+        const pauseMs = Math.max(0, Math.min(60000, Number(req.body?.pauseMs ?? 2500)));
+        const limit = Math.max(1, Math.min(500, Number(req.body?.limit ?? 140)));
+        const onlyWithoutPayments = req.body?.onlyWithoutPayments !== false;
+        const onlyFreePlan = req.body?.onlyFreePlan === true;
+        const onlyVerified = req.body?.onlyVerified !== false;
+        const excludeAdmins = req.body?.excludeAdmins !== false;
+        const selectedUserIds = Array.isArray(req.body?.selectedUserIds)
+            ? req.body.selectedUserIds
+                .map((value) => String(value || '').trim())
+                .filter((value) => mongoose.Types.ObjectId.isValid(value))
+            : [];
+
+        if (!subject || !html) {
+            return res.status(400).send({ error: 'Subiectul si HTML-ul sunt obligatorii.' });
+        }
+        if (!selectedUserIds.length) {
+            return res.status(400).send({ error: 'Selecteaza cel putin un utilizator.' });
+        }
+
+        const query = {};
+        query._id = { $in: selectedUserIds.map((value) => new mongoose.Types.ObjectId(value)) };
+
+        const users = await User.find(query, 'user profile plan payments emailVerified')
+            .sort({ createdAt: -1 })
+            .limit(Math.max(limit, selectedUserIds.length));
+
+        const recipientsToCreate = users
+            .map((user, index) => {
+                const email = normalizeEmail(user.user);
+                if (!email) return null;
+                const firstName = String(user.profile?.firstName || '').trim();
+                const lastName = String(user.profile?.lastName || '').trim();
+                const fullName = `${firstName} ${lastName}`.trim() || getUserDisplayName(user);
+
+                return {
+                    userId: user._id,
+                    sendIndex: index,
+                    email,
+                    name: fullName,
+                    mergeData: {
+                        firstName,
+                        lastName,
+                        fullName,
+                        email,
+                        eventName: String(user.profile?.eventName || '').trim(),
+                        eventType: String(user.profile?.eventType || '').trim(),
+                    },
+                };
+            })
+            .filter(Boolean);
+
+        if (!recipientsToCreate.length) {
+            return res.status(400).send({ error: 'Nu exista destinatari pentru filtrele alese.' });
+        }
+
+        const adminUser = await User.findById(req.user.userId).lean();
+        const createdBy = adminUser
+            ? `${adminUser.profile?.firstName || ''} ${adminUser.profile?.lastName || ''}`.trim() || adminUser.user
+            : 'Admin';
+
+        const campaign = await EmailCampaign.create({
+            title,
+            subject,
+            preheader,
+            html,
+            status: 'queued',
+            createdBy,
+            fromAddress: RESEND_FROM,
+            replyDomain: EMAIL_FEEDBACK_REPLY_DOMAIN,
+            replyLocalPart: EMAIL_FEEDBACK_REPLY_LOCAL_PART,
+            feedbackFormUrl: FEEDBACK_FORM_URL,
+            filters: {
+                onlyWithoutPayments,
+                onlyFreePlan,
+                onlyVerified,
+                excludeAdmins,
+                limit,
+            },
+            settings: {
+                pauseMs,
+            },
+            stats: {
+                recipientsTotal: recipientsToCreate.length,
+                pending: recipientsToCreate.length,
+            },
+        });
+
+        await EmailCampaignRecipient.insertMany(
+            recipientsToCreate.map((recipient) => ({
+                campaignId: campaign._id,
+                ...recipient,
+            })),
+        );
+
+        void runEmailCampaign(campaign._id);
+
+        res.send({
+            success: true,
+            campaignId: campaign._id,
+            queued: recipientsToCreate.length,
+        });
+    } catch (e) {
+        res.status(500).send({ error: e.message });
+    }
+});
+
+app.get('/api/email-feedback/form', async (req, res) => {
+    try {
+        const campaignId = toObjectIdOrNull(req.query?.campaign);
+        const recipientId = toObjectIdOrNull(req.query?.recipient);
+        if (!campaignId || !recipientId) {
+            return res.status(400).send({ error: 'Linkul de feedback este invalid.' });
+        }
+
+        const [campaign, recipient] = await Promise.all([
+            EmailCampaign.findById(campaignId).lean(),
+            EmailCampaignRecipient.findOne({ _id: recipientId, campaignId }).lean(),
+        ]);
+
+        if (!campaign || !recipient) {
+            return res.status(404).send({ error: 'Campania sau destinatarul nu exista.' });
+        }
+
+        res.send({
+            success: true,
+            campaign: {
+                _id: campaign._id,
+                title: campaign.title,
+                subject: campaign.subject,
+                preheader: campaign.preheader,
+            },
+            recipient: {
+                _id: recipient._id,
+                name: recipient.name,
+                email: maskEmailAddress(recipient.email),
+                answerChoice: recipient.answerChoice || '',
+                answerText: recipient.answerText || '',
+                formSubmittedAt: recipient.formSubmittedAt || null,
+            },
+        });
+    } catch (e) {
+        res.status(500).send({ error: e.message });
+    }
+});
+
+app.post('/api/email-feedback/visit', async (req, res) => {
+    try {
+        const campaignId = toObjectIdOrNull(req.body?.campaignId);
+        const recipientId = toObjectIdOrNull(req.body?.recipientId);
+        const choice = String(req.body?.choice || '').trim().slice(0, 80);
+        if (!campaignId || !recipientId) {
+            return res.status(400).send({ error: 'Date feedback invalide.' });
+        }
+
+        const recipient = await EmailCampaignRecipient.findOne({ _id: recipientId, campaignId });
+        if (!recipient) {
+            return res.status(404).send({ error: 'Destinatarul nu exista.' });
+        }
+
+        const now = new Date();
+        const update = {
+            $inc: { visitCount: 1 },
+            $set: {
+                lastVisitedAt: now,
+                lastEventAt: now,
+            },
+            $setOnInsert: {},
+        };
+        if (!recipient.firstVisitedAt) {
+            update.$set.firstVisitedAt = now;
+        }
+        if (choice && !recipient.answerChoice) {
+            update.$set.answerChoice = choice;
+        }
+
+        await EmailCampaignRecipient.findByIdAndUpdate(recipient._id, update);
+        await recordEmailCampaignEvent({
+            campaignId: recipient.campaignId,
+            recipientId: recipient._id,
+            userId: recipient.userId,
+            type: 'form_visited',
+            meta: {
+                choice,
+                ip: String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '').slice(0, 160),
+                userAgent: String(req.headers['user-agent'] || '').slice(0, 280),
+            },
+        });
+        await refreshEmailCampaignStats(recipient.campaignId);
+
+        res.send({ success: true });
+    } catch (e) {
+        res.status(500).send({ error: e.message });
+    }
+});
+
+app.post('/api/email-feedback/submit', async (req, res) => {
+    try {
+        const campaignId = toObjectIdOrNull(req.body?.campaignId);
+        const recipientId = toObjectIdOrNull(req.body?.recipientId);
+        const choice = String(req.body?.choice || '').trim().slice(0, 80);
+        const answerText = String(req.body?.answerText || '').trim().slice(0, 5000);
+
+        if (!campaignId || !recipientId) {
+            return res.status(400).send({ error: 'Date feedback invalide.' });
+        }
+        if (!choice && !answerText) {
+            return res.status(400).send({ error: 'Alege o varianta sau scrie un raspuns.' });
+        }
+
+        const recipient = await EmailCampaignRecipient.findOne({ _id: recipientId, campaignId });
+        if (!recipient) {
+            return res.status(404).send({ error: 'Destinatarul nu exista.' });
+        }
+
+        const now = new Date();
+        recipient.answerChoice = choice || recipient.answerChoice || '';
+        recipient.answerText = answerText;
+        recipient.formSubmittedAt = now;
+        recipient.lastEventAt = now;
+        if (!recipient.firstVisitedAt) recipient.firstVisitedAt = now;
+        recipient.lastVisitedAt = now;
+        recipient.visitCount = Math.max(1, Number(recipient.visitCount || 0));
+        await recipient.save();
+
+        await recordEmailCampaignEvent({
+            campaignId: recipient.campaignId,
+            recipientId: recipient._id,
+            userId: recipient.userId,
+            type: 'feedback_submitted',
+            meta: {
+                choice: recipient.answerChoice,
+                answerText,
+                ip: String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '').slice(0, 160),
+                userAgent: String(req.headers['user-agent'] || '').slice(0, 280),
+            },
+        });
+        await refreshEmailCampaignStats(recipient.campaignId);
+
+        res.send({ success: true });
+    } catch (e) {
+        res.status(500).send({ error: e.message });
     }
 });
 

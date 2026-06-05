@@ -247,10 +247,18 @@ export function createEmailNotifications({
       fallbackAppName: appName,
     });
 
-  const send = async ({ to, subject, html, attachments = [] }) => {
+  const send = async ({
+    to,
+    subject,
+    html,
+    attachments = [],
+    replyTo = "",
+    headers = {},
+    tags = [],
+  }) => {
     if (!resend) {
       logger.warn("[EMAIL] RESEND_API_KEY missing. Email not sent:", subject, "=>", to);
-      return false;
+      return { success: false, id: "", error: "missing_resend_api_key" };
     }
     try {
       const payload = {
@@ -262,11 +270,30 @@ export function createEmailNotifications({
       if (Array.isArray(attachments) && attachments.length) {
         payload.attachments = attachments;
       }
-      await resend.emails.send(payload);
-      return true;
+      if (replyTo) {
+        payload.replyTo = replyTo;
+      }
+      if (headers && typeof headers === "object" && Object.keys(headers).length) {
+        payload.headers = headers;
+      }
+      if (Array.isArray(tags) && tags.length) {
+        payload.tags = tags;
+      }
+
+      const result = await resend.emails.send(payload);
+      if (result?.error) {
+        logger.error("[EMAIL] Failed send:", subject, "=>", to, result.error);
+        return { success: false, id: "", error: result.error?.message || "send_failed" };
+      }
+
+      return {
+        success: true,
+        id: result?.data?.id || "",
+        error: "",
+      };
     } catch (error) {
       logger.error("[EMAIL] Failed send:", subject, "=>", to, error);
-      return false;
+      return { success: false, id: "", error: error?.message || "send_failed" };
     }
   };
 
@@ -300,11 +327,12 @@ export function createEmailNotifications({
       theme: "indigo",
     });
 
-    return send({
+    const result = await send({
       to: email,
       subject: sanitizeSubject(`Cod verificare email ${dynamicAppName}`),
       html,
     });
+    return result.success;
   };
 
   const sendPasswordResetOtp = async ({
@@ -338,11 +366,12 @@ export function createEmailNotifications({
       theme: "indigo",
     });
 
-    return send({
+    const result = await send({
       to: email,
       subject: sanitizeSubject(`Cod resetare parola ${dynamicAppName}`),
       html,
     });
+    return result.success;
   };
 
   const sendPasswordChangedEmail = async ({
@@ -385,11 +414,12 @@ export function createEmailNotifications({
       theme: "emerald",
     });
 
-    return send({
+    const result = await send({
       to: email,
       subject: sanitizeSubject(`Parola contului a fost schimbata - ${dynamicAppName}`),
       html,
     });
+    return result.success;
   };
 
   const sendVerificationSuccessEmail = async ({
@@ -423,11 +453,12 @@ export function createEmailNotifications({
       theme: "emerald",
     });
 
-    return send({
+    const result = await send({
       to: email,
       subject: sanitizeSubject(`Email verificat cu succes - ${dynamicAppName}`),
       html,
     });
+    return result.success;
   };
 
   const sendWelcomeEmail = async ({
@@ -471,11 +502,12 @@ export function createEmailNotifications({
       theme: "violet",
     });
 
-    return send({
+    const result = await send({
       to: email,
       subject: sanitizeSubject(`Evenimentul tau este gata in ${dynamicAppName}`),
       html,
     });
+    return result.success;
   };
 
   const sendLoginAlertEmail = async ({
@@ -516,11 +548,12 @@ export function createEmailNotifications({
       theme: "amber",
     });
 
-    return send({
+    const result = await send({
       to: email,
       subject: sanitizeSubject(`Alerta conectare ${dynamicAppName}`),
       html,
     });
+    return result.success;
   };
 
   const sendEventReminderEmail = async ({
@@ -568,11 +601,12 @@ export function createEmailNotifications({
       theme: "sky",
     });
 
-    return send({
+    const result = await send({
       to: email,
       subject: sanitizeSubject(`Reminder eveniment - ${dynamicAppName}`),
       html,
     });
+    return result.success;
   };
 
   const sendAdminNotificationEmail = async ({
@@ -619,11 +653,12 @@ export function createEmailNotifications({
       theme: priorityTheme,
     });
 
-    return send({
+    const result = await send({
       to: email,
       subject: sanitizeSubject(`${normalizedPriority === "high" ? "[HIGH] " : ""}${plainTitle} - ${dynamicAppName}`),
       html,
     });
+    return result.success;
   };
 
   const sendGuestRsvpEmail = async ({
@@ -713,11 +748,12 @@ export function createEmailNotifications({
       theme: rsvpTheme,
     });
 
-    return send({
+    const result = await send({
       to: email,
       subject: sanitizeSubject(`RSVP ${statusLabel} - ${safeGuest}`),
       html,
     });
+    return result.success;
   };
 
   const sendBillingInvoiceEmail = async ({
@@ -765,12 +801,13 @@ export function createEmailNotifications({
       theme: "indigo",
     });
 
-    return send({
+    const result = await send({
       to: email,
       subject: sanitizeSubject(`Factura ${invoiceNumber || ""} - ${dynamicAppName}`),
       html,
       attachments,
     });
+    return result.success;
   };
 
   const sendProductUpdateEmail = async ({
@@ -823,11 +860,12 @@ export function createEmailNotifications({
       theme: "emerald",
     });
 
-    return send({
+    const result = await send({
       to: email,
       subject: sanitizeSubject(String(title || "Am facut update la platforma Esa").trim() || "Am facut update la platforma Esa"),
       html,
     });
+    return result.success;
   };
 
   const sendCustomHtmlEmail = async ({
@@ -839,12 +877,40 @@ export function createEmailNotifications({
     const safeHtml = String(html || "").trim();
     if (!safeSubject || !safeHtml) return false;
 
-    return send({
+    const result = await send({
       to: email,
       subject: safeSubject,
       html: safeHtml,
     });
+    return result.success;
   };
+
+  const sendRawEmail = async ({
+    email,
+    subject = "",
+    html = "",
+    attachments = [],
+    replyTo = "",
+    headers = {},
+    tags = [],
+  }) => {
+    const safeSubject = sanitizeSubject(subject || "Email Esa");
+    const safeHtml = String(html || "").trim();
+    if (!safeSubject || !safeHtml) {
+      return { success: false, id: "", error: "missing_subject_or_html" };
+    }
+
+    return send({
+      to: email,
+      subject: safeSubject,
+      html: safeHtml,
+      attachments,
+      replyTo: String(replyTo || "").trim(),
+      headers,
+      tags,
+    });
+  };
+
   return {
     isEnabled: Boolean(resend),
     sendVerificationOtp,
@@ -856,6 +922,7 @@ export function createEmailNotifications({
     sendEventReminderEmail,
     sendProductUpdateEmail,
     sendCustomHtmlEmail,
+    sendRawEmail,
     sendAdminNotificationEmail,
     sendGuestRsvpEmail,
     sendBillingInvoiceEmail,
