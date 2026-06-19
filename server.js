@@ -6247,8 +6247,9 @@ app.post('/api/netopia/initiate', authenticateToken, async (req, res) => {
         const displayName = billingCompany || billingName;
         const { firstName, lastName } = splitDisplayName(displayName);
 
+        const netopiaReturnBaseUrl = API_BASE_URL.replace(/\/$/, '');
         const returnUrl =
-          `${APP_URL.replace(/\/$/, '')}/api/netopia/return?orderId=${encodeURIComponent(orderId)}`;
+          `${netopiaReturnBaseUrl}/api/netopia/return?orderId=${encodeURIComponent(orderId)}`;
 
         const orderXml = {
             order: {
@@ -6256,7 +6257,7 @@ app.post('/api/netopia/initiate', authenticateToken, async (req, res) => {
                 signature: NETOPIA_SIGNATURE,
                 url: {
                     return:  returnUrl,
-                    confirm: `${APP_URL}/api/netopia/confirm`,
+                    confirm: `${netopiaReturnBaseUrl}/api/netopia/confirm`,
                 },
                 invoice: {
                     $: { currency: 'RON', amount },
