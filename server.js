@@ -852,14 +852,7 @@ function normalizePlan(value) {
 
 function accountRequiresPayment(account) {
   if (account?.isAdmin === true) return false;
-  const hasPaidPayment = Array.isArray(account?.payments) && account.payments.some(
-    (payment) => String(payment?.status || '').trim().toLowerCase() === 'paid',
-  );
-  return (
-    account?.requiresPayment === true ||
-    normalizePlan(account?.plan) === 'free' ||
-    !hasPaidPayment
-  );
+  return normalizePlan(account?.plan) === 'free';
 }
 
 async function synchronizePaymentRequirements() {
@@ -873,7 +866,6 @@ async function synchronizePaymentRequirements() {
       $or: [
         { plan: 'free' },
         { plan: { $exists: false } },
-        { payments: { $not: { $elemMatch: { status: /^paid$/i } } } },
       ],
     },
     { $set: { requiresPayment: true } },
@@ -882,7 +874,6 @@ async function synchronizePaymentRequirements() {
     {
       isAdmin: { $ne: true },
       plan: { $in: ['basic', 'premium'] },
-      payments: { $elemMatch: { status: /^paid$/i } },
     },
     { $set: { requiresPayment: false } },
   );
