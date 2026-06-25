@@ -3,3 +3,9 @@ node_modules/
 uploads/
 dist/
 *.log
+secrets/
+*.key
+*.pem
+*.p12
+*.pfx
+*.cer

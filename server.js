@@ -176,7 +176,7 @@ if (NETOPIA_SIGNATURE) {
   }
 }
 
-// --- IMPORTANT: Pune acelasi ID aici pentru verificare (deÈ™i e opÈ›ional dacÄƒ foloseÈ™ti doar token decoder simplu, e recomandat pentru securitate) ---
+// --- IMPORTANT: Pune acelasi ID aici pentru verificare (desie optional daca foloseÈ™ti doar token decoder simplu, e recomandat pentru securitate) ---
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '780198284819-p7hf7nqagkhbe6ikp5r4t46kkaktqumc.apps.googleusercontent.com';
 
 const stripe = new Stripe(STRIPE_SECRET_KEY);
@@ -274,6 +274,42 @@ app.use(
 );
 
 // --- SCHEMAS ---
+const LandingFeaturedCarouselItemSchema = new mongoose.Schema({
+    id: { type: String, required: true },
+    collection: {
+        type: String,
+        required: true,
+        enum: ['wedding', 'baptism', 'anniversary', 'other'],
+    },
+    title: { type: String, required: true },
+    category: { type: String, default: '' },
+    year: { type: String, default: '' },
+    previewSrc: { type: String, required: true },
+    posterSrc: { type: String, default: '' },
+    summary: { type: String, default: '' },
+    badge: { type: String, default: null },
+}, { _id: false });
+
+const LandingProcessStepSchema = new mongoose.Schema({
+    id: { type: String, required: true },
+    label: { type: String, required: true },
+    title: { type: String, required: true },
+    description: { type: String, default: '' },
+    videoSrc: { type: String, required: true },
+    posterSrc: { type: String, default: '' },
+    background: { type: String, default: '#edf7fb' },
+    points: { type: [String], default: [] },
+}, { _id: false });
+
+const LandingSupplierShowcaseItemSchema = new mongoose.Schema({
+    id: { type: String, required: true },
+    title: { type: String, required: true },
+    category: { type: String, required: true },
+    note: { type: String, default: '' },
+    image: { type: String, required: true },
+    accent: { type: String, default: '#ffede3' },
+}, { _id: false });
+
 const SystemConfigSchema = new mongoose.Schema({
     key: { type: String, default: 'global_config', unique: true },
     invoiceCounter: { type: Number, default: 0 },
@@ -307,7 +343,32 @@ const SystemConfigSchema = new mongoose.Schema({
         currency: { type: String, default: 'ron' }
     },
     servicesComingSoon: { type: Boolean, default: false },
-    templateVisibility: { type: Object, default: {} }
+    templateVisibility: { type: Object, default: {} },
+    landingFeaturedCarousel: {
+        type: [LandingFeaturedCarouselItemSchema],
+        default: [],
+    },
+    landingFeaturedCarouselEnabledCollections: {
+        type: [String],
+        default: ['wedding', 'baptism', 'anniversary'],
+    },
+    landingProcess: {
+        eyebrow: { type: String, default: '' },
+        introDescription: { type: String, default: '' },
+        title: { type: String, default: '' },
+        ctaLabel: { type: String, default: '' },
+        steps: { type: [LandingProcessStepSchema], default: [] },
+    },
+    landingSupplierShowcase: {
+        sectionEyebrow: { type: String, default: '' },
+        sectionTitle: { type: String, default: '' },
+        sectionDescription: { type: String, default: '' },
+        eyebrow: { type: String, default: '' },
+        title: { type: String, default: '' },
+        description: { type: String, default: '' },
+        tags: { type: [String], default: [] },
+        items: { type: [LandingSupplierShowcaseItemSchema], default: [] },
+    },
 });
 
 
@@ -339,8 +400,8 @@ const TemplateDefaults = mongoose.model('TemplateDefaults', TemplateDefaultsSche
 const PaymentSchema = new mongoose.Schema({
     date: { type: Date, default: Date.now },
     amount: Number,
-    invoiceId: String,      // ORD_... (referinÈ›Äƒ internÄƒ)
-    invoiceNumber: String,  // FACT-2026-0001 (numÄƒr fiscal)
+    invoiceId: String,      // ORD_... (referinta interna)
+    invoiceNumber: String,  // FACT-2026-0001 (numar fiscal)
     billingEmail: String,
     invoicePdfUrl: String,
     hostedInvoiceUrl: String,
@@ -424,6 +485,7 @@ const UserSchema = new mongoose.Schema({
     lastIp: String,
     lastUserAgent: String,
   },
+  requiresPayment: { type: Boolean, default: false },
   emailPreferences: {
     feedbackOptOutAt: Date,
     feedbackOptOutSource: String,
@@ -576,7 +638,7 @@ const UserSchema = new mongoose.Schema({
 
 const ProjectSchema = new mongoose.Schema({
   ownerId: { type: String, required: true },
-  name: { type: String, default: "Sala PrincipalÄƒ" },
+  name: { type: String, default: "Sala Principala" },
   slug: { type: String, default: "eveniment" },
   selectedTemplate: { type: String, default: "classic" },
   elements: { type: Array, default: [] },
@@ -601,7 +663,18 @@ const GuestSchema = new mongoose.Schema({
     childrenCount: { type: Number, default: 0 },
     hasChildren: { type: Boolean, default: false },
     message: String,
-    dietary: String
+    dietary: String,
+    vegetarianCount: { type: Number, default: 0 },
+    veganCount: { type: Number, default: 0 },
+    allergies: String,
+    participants: [{
+      id: String,
+      type: { type: String, enum: ['adult', 'child'] },
+      label: String,
+      menuType: { type: String, enum: ['standard', 'vegetarian', 'vegan', 'kids', 'special'], default: 'standard' },
+      allergies: String
+    }],
+    needsAccommodation: { type: Boolean, default: false }
   }
 });
 
@@ -773,6 +846,44 @@ function normalizePlan(value) {
   return plan === 'premium' || plan === 'basic' ? plan : 'free';
 }
 
+function accountRequiresPayment(account) {
+  if (account?.isAdmin === true) return false;
+  const hasPaidPayment = Array.isArray(account?.payments) && account.payments.some(
+    (payment) => String(payment?.status || '').trim().toLowerCase() === 'paid',
+  );
+  return (
+    account?.requiresPayment === true ||
+    normalizePlan(account?.plan) === 'free' ||
+    !hasPaidPayment
+  );
+}
+
+async function synchronizePaymentRequirements() {
+  await User.updateMany(
+    { isAdmin: true },
+    { $set: { requiresPayment: false } },
+  );
+  await User.updateMany(
+    {
+      isAdmin: { $ne: true },
+      $or: [
+        { plan: 'free' },
+        { plan: { $exists: false } },
+        { payments: { $not: { $elemMatch: { status: /^paid$/i } } } },
+      ],
+    },
+    { $set: { requiresPayment: true } },
+  );
+  await User.updateMany(
+    {
+      isAdmin: { $ne: true },
+      plan: { $in: ['basic', 'premium'] },
+      payments: { $elemMatch: { status: /^paid$/i } },
+    },
+    { $set: { requiresPayment: false } },
+  );
+}
+
 function planAtLeast(currentPlan, requestedPlan) {
   const current = normalizePlan(currentPlan);
   const target = normalizePlan(requestedPlan);
@@ -889,14 +1000,46 @@ const isPastOrInvalidEventDate = (value) => {
 };
 
 // --- MIDDLEWARE ---
+const PAYMENT_REQUIRED_ALLOWED_PATHS = new Set([
+  '/api/user/me',
+  '/api/upgrade',
+  '/api/netopia/initiate',
+]);
+
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; 
   if (!token) return res.sendStatus(401); 
-  jwt.verify(token, JWT_SECRET, (err, user) => {
+  jwt.verify(token, JWT_SECRET, async (err, user) => {
     if (err) return res.sendStatus(403); 
-    req.user = user; 
-    next();
+    try {
+      const account = await User.findById(user.userId, 'isAdmin plan requiresPayment payments.status');
+      if (!account) return res.sendStatus(404);
+
+      const normalizedPath = String(req.originalUrl || req.path || '').split('?')[0];
+      const requiresPayment = accountRequiresPayment(account);
+      if (account.requiresPayment !== requiresPayment) {
+        await User.updateOne(
+          { _id: account._id },
+          { $set: { requiresPayment } },
+        );
+      }
+      if (
+        requiresPayment &&
+        !PAYMENT_REQUIRED_ALLOWED_PATHS.has(normalizedPath)
+      ) {
+        return res.status(402).send({
+          error: 'Payment required.',
+          code: 'PAYMENT_REQUIRED',
+        });
+      }
+
+      req.user = user;
+      req.account = account;
+      next();
+    } catch (authError) {
+      return res.status(500).send({ error: 'Authentication check failed.' });
+    }
   });
 };
 
@@ -1739,6 +1882,7 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
         await User.findByIdAndUpdate(userId, {
             $set: {
                 plan: nextPlan,
+                requiresPayment: false,
                 ...profileBillingSet,
             },
             $push: { payments: newPayment },
@@ -2197,7 +2341,11 @@ app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // --- MONGODB CONNECTION ---
 mongoose.connect(MONGO_URI)
-  .then(() => { console.log('✅ Connected to MongoDB'); seedServices(); })
+  .then(async () => {
+    console.log('✅ Connected to MongoDB');
+    await synchronizePaymentRequirements();
+    await seedServices();
+  })
   .catch(err => console.error('❌ MongoDB Connection Error:', err));
 
 // --- UTILS ---
@@ -2720,6 +2868,7 @@ app.post('/api/register', async (req, res) => {
       },
       plan: 'free',
       isAdmin: isFirstUser,
+      requiresPayment: !isFirstUser,
       profile: {
         email: user,
         isSetupComplete: false,
@@ -3324,6 +3473,7 @@ app.post('/api/auth/verify-email-otp', async (req, res) => {
       userId: foundUser._id,
       plan: foundUser.plan || 'free',
       isAdmin: foundUser.isAdmin,
+      requiresPayment: accountRequiresPayment(foundUser),
       profile: foundUser.profile,
       payments: foundUser.payments || [],
       archivedEvents: foundUser.archivedEvents || [],
@@ -3386,6 +3536,7 @@ app.post('/api/login', async (req, res) => {
       userId: foundUser._id,
       plan: foundUser.plan || 'free',
       isAdmin: foundUser.isAdmin,
+      requiresPayment: accountRequiresPayment(foundUser),
       profile: foundUser.profile,
       payments: foundUser.payments || [],
       archivedEvents: foundUser.archivedEvents || [],
@@ -3407,14 +3558,14 @@ app.post('/api/_legacy/register-disabled', async (req, res) => {
     const { pass } = req.body; 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!user || !emailRegex.test(user)) {
-        return res.status(400).send({ error: 'Adresa de email este obligatorie È™i trebuie sÄƒ fie validÄƒ.' });
+        return res.status(400).send({ error: 'Adresa de email este obligatorie sitrebuie sa fie valida.' });
     }
     if (!pass || pass.length < 6) {
-        return res.status(400).send({ error: 'Parola trebuie sÄƒ aibÄƒ minim 6 caractere.' });
+        return res.status(400).send({ error: 'Parola trebuie sa aiba minim 6 caractere.' });
     }
 
     const existingUser = await User.findOne({ user });
-    if (existingUser) return res.status(400).send({ error: 'ExistÄƒ deja un cont cu acest email.' });
+    if (existingUser) return res.status(400).send({ error: 'Exista deja un cont cu acest email.' });
     
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(pass, salt);
@@ -3514,6 +3665,7 @@ app.post('/api/google-auth', async (req, res) => {
                 googleId: sub,
                 plan: 'free',
                 isAdmin: isFirstUser,
+                requiresPayment: !isFirstUser,
                 profile: {
                     email: email,
                     isSetupComplete: false,
@@ -3558,6 +3710,7 @@ app.post('/api/google-auth', async (req, res) => {
             userId: user._id, 
             plan: user.plan || 'free', 
             isAdmin: user.isAdmin, 
+            requiresPayment: accountRequiresPayment(user),
             profile: user.profile, 
             payments: user.payments || [],
             archivedEvents: user.archivedEvents || [],
@@ -3632,6 +3785,7 @@ app.get('/api/user/me', authenticateToken, async (req, res) => {
         userId: user._id, 
         plan: user.plan || 'free', 
         isAdmin: user.isAdmin, 
+        requiresPayment: accountRequiresPayment(user),
         profile: mergedProfile, 
         payments: user.payments || [],
         archivedEvents: user.archivedEvents || [],
@@ -3729,7 +3883,7 @@ app.post('/api/user/setup-event', authenticateToken, async (req, res) => {
         } = req.body || {};
         
         if (!eventType || !weddingDate) {
-            return res.status(400).send({ error: 'Tipul È™i data evenimentului sunt obligatorii.' });
+            return res.status(400).send({ error: 'Tipul sidata evenimentului sunt obligatorii.' });
         }
 
         if (isPastOrInvalidEventDate(weddingDate)) {
@@ -3791,19 +3945,19 @@ app.post('/api/user/setup-event', authenticateToken, async (req, res) => {
             defaultData["profile.partner1Name"] = "Camila";
             defaultData["profile.partner2Name"] = "Sebastián";
             defaultData["profile.welcomeText"] = "Ne bucurăm să anunțăm căsătoria noastră și dorim să împărțim cu tine acest moment special.";
-            defaultData["profile.celebrationText"] = "nunÈ›ii noastre";
+            defaultData["profile.celebrationText"] = "nuntii noastre";
             defaultData["profile.showWelcomeText"] = true;
             defaultData["profile.showCelebrationText"] = true;
             defaultData["profile.showCountdown"] = true;
             defaultData["profile.showRsvpButton"] = true;
-            defaultData["profile.rsvpButtonText"] = "ConfirmÄƒ PrezenÈ›a";
+            defaultData["profile.rsvpButtonText"] = "Confirma Prezenta";
             defaultData["profile.godparents"] = JSON.stringify([
-                { godfather: "Prenume NaÈ™", godmother: "Prenume NaÈ™Äƒ" }
+                { godfather: "Prenume NaÈ™", godmother: "Prenume NaÈ™a" }
             ]);
             defaultData["profile.parents"] = JSON.stringify({
-                p1_father: "TatÄƒl Miresei",
+                p1_father: "Tatal Miresei",
                 p1_mother: "Mama Miresei",
-                p2_father: "TatÄƒl Mirelui",
+                p2_father: "Tatal Mirelui",
                 p2_mother: "Mama Mirelui",
                 others: []
             });
@@ -3923,7 +4077,8 @@ app.post('/api/user/archive-event', authenticateToken, async (req, res) => {
             $push: { archivedEvents: archiveEntry },
             $set: { 
                 profile: resetProfile,
-                plan: 'free' 
+                plan: 'free',
+                requiresPayment: true,
             }
         });
 
@@ -3939,7 +4094,7 @@ app.post('/api/user/archive-event', authenticateToken, async (req, res) => {
 app.get('/api/archived-event/:snapshotId', authenticateToken, async (req, res) => {
     try {
         const snapshot = await ArchivedSnapshot.findOne({ _id: req.params.snapshotId, ownerId: req.user.userId });
-        if (!snapshot) return res.status(404).send({ error: 'ArhivÄƒ inexistentÄƒ.' });
+        if (!snapshot) return res.status(404).send({ error: 'Arhiva inexistenta.' });
         res.send(snapshot.data);
     } catch (e) {
         console.error(e);
@@ -3951,7 +4106,7 @@ app.get('/api/archived-event/:snapshotId', authenticateToken, async (req, res) =
 
 // ─── Media upload — folder ierarhic per user ─────────────────────────────────
 //
-//  StructurÄƒ: uploads/{userId[0..1]}/{userId[2..3]}/{userId}/{timestamp}-{random}.jpg
+//  Structura: uploads/{userId[0..1]}/{userId[2..3]}/{userId}/{timestamp}-{random}.jpg
 //  Exemplu:   uploads/5f/3a/5f3ab2c1d.../1700000000-x7k2.jpg
 //
 //  De ce sharding pe 2 nivele:
@@ -4050,7 +4205,7 @@ app.post('/api/upload', authenticateToken, upload.single('file'), (req, res) => 
 // POST /api/download-yt-audio — descarcă audio de pe YouTube cu @ybd-project/ytdl-core
 app.post('/api/download-yt-audio', authenticateToken, async (req, res) => {
     const { url } = req.body;
-    if (!url || typeof url !== 'string') return res.status(400).json({ error: 'URL lipsÄƒ.' });
+    if (!url || typeof url !== 'string') return res.status(400).json({ error: 'URL lipsa.' });
 
     const ytIdMatch = url.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([a-zA-Z0-9_-]{11})/);
     if (!ytIdMatch) return res.status(400).json({ error: 'URL YouTube invalid.' });
@@ -4070,14 +4225,14 @@ app.post('/api/download-yt-audio', authenticateToken, async (req, res) => {
             console.warn('[ytdl] metadata warn:', e.message);
         }
 
-        // 2. SalveazÄƒ audio
+        // 2. Salveaza audio
         const uid   = String(req.user.userId);
         const dir   = userUploadDir(uid);
         const fname = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.webm`;
         const fpath = path.join(dir, fname);
 
         await new Promise((resolve, reject) => {
-            // toPipeableStream primeÈ™te URL + opÈ›iuni, returneazÄƒ un stream Node.js
+            // toPipeableStream primeÈ™te URL + optiuni, returneaza un stream Node.js
             const pipeable = toPipeableStream(cleanUrl, {
                 filter: 'audioonly',
                 quality: 'highestaudio',
@@ -4098,7 +4253,7 @@ app.post('/api/download-yt-audio', authenticateToken, async (req, res) => {
 
     } catch (e) {
         console.error('[ytdl] error:', e.message);
-        res.status(500).json({ error: 'Nu s-a putut descÄƒrca melodia. ' + e.message });
+        res.status(500).json({ error: 'Nu s-a putut descarca melodia. ' + e.message });
     }
 });
 
@@ -4106,7 +4261,7 @@ app.post('/api/download-yt-audio', authenticateToken, async (req, res) => {
 app.delete('/api/upload', authenticateToken, (req, res) => {
     try {
         const { url } = req.body;
-        if (!url || typeof url !== 'string') return res.status(400).json({ error: 'URL lipsÄƒ.' });
+        if (!url || typeof url !== 'string') return res.status(400).json({ error: 'URL lipsa.' });
 
         // Reconstruiește path-ul absolut și verifică că e în folderul userului
         const uid      = String(req.user.userId);
@@ -4584,7 +4739,14 @@ app.put('/api/admin/users/:id', authenticateAdmin, async (req, res) => {
         const { plan, user, profile, emailVerified } = req.body || {};
         const updatePayload = {};
 
-        if (typeof plan === 'string') updatePayload.plan = plan;
+        if (typeof plan === 'string') {
+            updatePayload.plan = plan;
+            if (plan === 'basic' || plan === 'premium') {
+                updatePayload.requiresPayment = false;
+            } else if (plan === 'free') {
+                updatePayload.requiresPayment = true;
+            }
+        }
         if (typeof user === 'string') updatePayload.user = user.trim().toLowerCase();
         if (typeof emailVerified === 'boolean') updatePayload.emailVerified = emailVerified;
 
@@ -5165,7 +5327,10 @@ app.post('/api/email-feedback/submit', async (req, res) => {
 app.post('/api/admin/cancel-sub', authenticateAdmin, async (req, res) => {
     try {
         const { userId } = req.body;
-        await User.findByIdAndUpdate(userId, { plan: 'free' });
+        await User.findByIdAndUpdate(userId, {
+            plan: 'free',
+            requiresPayment: true,
+        });
         res.send({ success: true });
     } catch (e) {
         res.status(500).send({ error: e.message });
@@ -5249,6 +5414,352 @@ app.get('/api/config/public', async (req, res) => {
     }
 });
 
+const LANDING_FEATURED_COLLECTIONS = ['wedding', 'baptism', 'anniversary', 'other'];
+
+const normalizeLandingFeaturedCarouselItems = (value) => {
+    if (!Array.isArray(value)) return [];
+
+    return value.map((item) => ({
+        id: String(item?.id || '').trim().slice(0, 120),
+        collection: String(item?.collection || '').trim(),
+        title: String(item?.title || '').trim().slice(0, 160),
+        category: String(item?.category || '').trim().slice(0, 160),
+        year: String(item?.year || '').trim().slice(0, 20),
+        previewSrc: String(item?.previewSrc || '').trim().slice(0, 2000),
+        posterSrc: String(item?.posterSrc || '').trim().slice(0, 2000),
+        summary: String(item?.summary || '').trim().slice(0, 600),
+        badge: String(item?.badge || '').trim().slice(0, 80) || null,
+    }));
+};
+
+const normalizeLandingFeaturedCarouselCollections = (value) => {
+    if (!Array.isArray(value)) {
+        return ['wedding', 'baptism', 'anniversary'];
+    }
+
+    return [
+        ...new Set(
+            value
+                .map((collection) => String(collection || '').trim())
+                .filter((collection) =>
+                    LANDING_FEATURED_COLLECTIONS.includes(collection),
+                ),
+        ),
+    ];
+};
+
+app.get('/api/config/landing-featured-carousel', async (req, res) => {
+    try {
+        const config = await getConfig();
+        res.json({
+            items: normalizeLandingFeaturedCarouselItems(
+                config?.landingFeaturedCarousel,
+            ),
+            enabledCollections: normalizeLandingFeaturedCarouselCollections(
+                config?.landingFeaturedCarouselEnabledCollections,
+            ),
+        });
+    } catch (e) {
+        res.status(500).send({ error: e.message });
+    }
+});
+
+app.get('/api/admin/config/landing-featured-carousel', authenticateAdmin, async (req, res) => {
+    try {
+        const config = await getConfig();
+        res.json({
+            items: normalizeLandingFeaturedCarouselItems(
+                config?.landingFeaturedCarousel,
+            ),
+            enabledCollections: normalizeLandingFeaturedCarouselCollections(
+                config?.landingFeaturedCarouselEnabledCollections,
+            ),
+        });
+    } catch (e) {
+        res.status(500).send({ error: e.message });
+    }
+});
+
+app.put('/api/admin/config/landing-featured-carousel', authenticateAdmin, async (req, res) => {
+    try {
+        const items = normalizeLandingFeaturedCarouselItems(req.body?.items);
+        const enabledCollections =
+            normalizeLandingFeaturedCarouselCollections(
+                req.body?.enabledCollections,
+            );
+        if (items.length < 1 || items.length > 80) {
+            return res.status(400).json({
+                error: 'Lista trebuie sa contina intre 1 si 80 de carduri.',
+            });
+        }
+
+        const invalidItem = items.find(
+            (item) =>
+                !item.id ||
+                !item.title ||
+                !item.previewSrc ||
+                !LANDING_FEATURED_COLLECTIONS.includes(item.collection),
+        );
+        if (invalidItem) {
+            return res.status(400).json({
+                error: 'Fiecare card necesita ID, titlu, categorie valida si media principala.',
+            });
+        }
+
+        const uniqueIds = new Set(items.map((item) => item.id));
+        if (uniqueIds.size !== items.length) {
+            return res.status(400).json({
+                error: 'ID-urile cardurilor trebuie sa fie unice.',
+            });
+        }
+
+        if (enabledCollections.length === 0) {
+            return res.status(400).json({
+                error: 'Cel putin o categorie trebuie sa fie activa.',
+            });
+        }
+
+        const enabledCollectionWithoutItems = enabledCollections.find(
+            (collection) =>
+                !items.some((item) => item.collection === collection),
+        );
+        if (enabledCollectionWithoutItems) {
+            return res.status(400).json({
+                error: 'O categorie activa trebuie sa contina cel putin un card.',
+            });
+        }
+
+        await SystemConfig.findOneAndUpdate(
+            { key: 'global_config' },
+            {
+                $set: {
+                    landingFeaturedCarousel: items,
+                    landingFeaturedCarouselEnabledCollections:
+                        enabledCollections,
+                },
+            },
+            { upsert: true },
+        );
+
+        res.json({ success: true, items, enabledCollections });
+    } catch (e) {
+        res.status(500).send({ error: e.message });
+    }
+});
+
+const normalizeLandingProcessConfig = (value) => {
+    const source = value && typeof value === 'object' ? value : {};
+    const rawSteps = Array.isArray(source.steps) ? source.steps : [];
+
+    return {
+        eyebrow: String(source.eyebrow || '').trim().slice(0, 120),
+        introDescription: String(source.introDescription || '').trim().slice(0, 600),
+        title: String(source.title || '').trim().slice(0, 240),
+        ctaLabel: String(source.ctaLabel || '').trim().slice(0, 120),
+        steps: rawSteps.map((step) => ({
+            id: String(step?.id || '').trim().slice(0, 120),
+            label: String(step?.label || '').trim().slice(0, 160),
+            title: String(step?.title || '').trim().slice(0, 240),
+            description: String(step?.description || '').trim().slice(0, 800),
+            videoSrc: String(step?.videoSrc || '').trim().slice(0, 2000),
+            posterSrc: String(step?.posterSrc || '').trim().slice(0, 2000),
+            background: String(step?.background || '#edf7fb').trim().slice(0, 40),
+            points: Array.isArray(step?.points)
+                ? step.points
+                    .map((point) => String(point || '').trim().slice(0, 120))
+                    .filter(Boolean)
+                    .slice(0, 8)
+                : [],
+        })),
+    };
+};
+
+app.get('/api/config/landing-process', async (req, res) => {
+    try {
+        const config = await getConfig();
+        res.json(normalizeLandingProcessConfig(config?.landingProcess));
+    } catch (e) {
+        res.status(500).send({ error: e.message });
+    }
+});
+
+app.get('/api/admin/config/landing-process', authenticateAdmin, async (req, res) => {
+    try {
+        const config = await getConfig();
+        res.json(normalizeLandingProcessConfig(config?.landingProcess));
+    } catch (e) {
+        res.status(500).send({ error: e.message });
+    }
+});
+
+app.put('/api/admin/config/landing-process', authenticateAdmin, async (req, res) => {
+    try {
+        const processConfig = normalizeLandingProcessConfig(req.body);
+        if (processConfig.steps.length < 1 || processConfig.steps.length > 20) {
+            return res.status(400).json({
+                error: 'Sectiunea trebuie sa contina intre 1 si 20 de pasi.',
+            });
+        }
+
+        if (
+            !processConfig.eyebrow ||
+            !processConfig.introDescription ||
+            !processConfig.title ||
+            !processConfig.ctaLabel
+        ) {
+            return res.status(400).json({
+                error: 'Textele generale ale sectiunii sunt obligatorii.',
+            });
+        }
+
+        const invalidStep = processConfig.steps.find(
+            (step) =>
+                !step.id ||
+                !step.label ||
+                !step.title ||
+                !step.description ||
+                !step.videoSrc,
+        );
+        if (invalidStep) {
+            return res.status(400).json({
+                error: 'Fiecare pas necesita ID, eticheta, titlu, descriere si media.',
+            });
+        }
+
+        const uniqueIds = new Set(
+            processConfig.steps.map((step) => step.id),
+        );
+        if (uniqueIds.size !== processConfig.steps.length) {
+            return res.status(400).json({
+                error: 'ID-urile pasilor trebuie sa fie unice.',
+            });
+        }
+
+        await SystemConfig.findOneAndUpdate(
+            { key: 'global_config' },
+            { $set: { landingProcess: processConfig } },
+            { upsert: true },
+        );
+
+        res.json({ success: true, ...processConfig });
+    } catch (e) {
+        res.status(500).send({ error: e.message });
+    }
+});
+
+const normalizeLandingSupplierShowcaseConfig = (value) => {
+    const source = value && typeof value === 'object' ? value : {};
+    const rawItems = Array.isArray(source.items) ? source.items : [];
+
+    return {
+        sectionEyebrow: String(source.sectionEyebrow || '').trim().slice(0, 120),
+        sectionTitle: String(source.sectionTitle || '').trim().slice(0, 240),
+        sectionDescription: String(source.sectionDescription || '').trim().slice(0, 800),
+        eyebrow: String(source.eyebrow || '').trim().slice(0, 120),
+        title: String(source.title || '').trim().slice(0, 240),
+        description: String(source.description || '').trim().slice(0, 800),
+        tags: Array.isArray(source.tags)
+            ? source.tags
+                .map((tag) => String(tag || '').trim().slice(0, 100))
+                .filter(Boolean)
+                .slice(0, 24)
+            : [],
+        items: rawItems.map((item) => ({
+            id: String(item?.id || '').trim().slice(0, 120),
+            title: String(item?.title || '').trim().slice(0, 160),
+            category: String(item?.category || '').trim().slice(0, 180),
+            note: String(item?.note || '').trim().slice(0, 600),
+            image: String(item?.image || '').trim().slice(0, 2000),
+            accent: String(item?.accent || '#ffede3').trim().slice(0, 40),
+        })),
+    };
+};
+
+app.get('/api/config/landing-supplier-showcase', async (req, res) => {
+    try {
+        const config = await getConfig();
+        res.json(
+            normalizeLandingSupplierShowcaseConfig(
+                config?.landingSupplierShowcase,
+            ),
+        );
+    } catch (e) {
+        res.status(500).send({ error: e.message });
+    }
+});
+
+app.get('/api/admin/config/landing-supplier-showcase', authenticateAdmin, async (req, res) => {
+    try {
+        const config = await getConfig();
+        res.json(
+            normalizeLandingSupplierShowcaseConfig(
+                config?.landingSupplierShowcase,
+            ),
+        );
+    } catch (e) {
+        res.status(500).send({ error: e.message });
+    }
+});
+
+app.put('/api/admin/config/landing-supplier-showcase', authenticateAdmin, async (req, res) => {
+    try {
+        const showcaseConfig =
+            normalizeLandingSupplierShowcaseConfig(req.body);
+
+        if (showcaseConfig.items.length < 2 || showcaseConfig.items.length > 40) {
+            return res.status(400).json({
+                error: 'Showcase-ul trebuie sa contina intre 2 si 40 de carduri.',
+            });
+        }
+
+        if (
+            !showcaseConfig.sectionEyebrow ||
+            !showcaseConfig.sectionTitle ||
+            !showcaseConfig.sectionDescription ||
+            !showcaseConfig.eyebrow ||
+            !showcaseConfig.title ||
+            !showcaseConfig.description
+        ) {
+            return res.status(400).json({
+                error: 'Toate textele generale ale sectiunii sunt obligatorii.',
+            });
+        }
+
+        const invalidItem = showcaseConfig.items.find(
+            (item) =>
+                !item.id ||
+                !item.title ||
+                !item.category ||
+                !item.note ||
+                !item.image,
+        );
+        if (invalidItem) {
+            return res.status(400).json({
+                error: 'Fiecare card necesita ID, titlu, categorie, descriere si imagine.',
+            });
+        }
+
+        const uniqueIds = new Set(
+            showcaseConfig.items.map((item) => item.id),
+        );
+        if (uniqueIds.size !== showcaseConfig.items.length) {
+            return res.status(400).json({
+                error: 'ID-urile cardurilor trebuie sa fie unice.',
+            });
+        }
+
+        await SystemConfig.findOneAndUpdate(
+            { key: 'global_config' },
+            { $set: { landingSupplierShowcase: showcaseConfig } },
+            { upsert: true },
+        );
+
+        res.json({ success: true, ...showcaseConfig });
+    } catch (e) {
+        res.status(500).send({ error: e.message });
+    }
+});
+
 app.get('/api/config/template-visibility', async (req, res) => {
     try {
         const config = await getConfig();
@@ -5323,7 +5834,7 @@ app.delete('/api/admin/config/template-defaults/:templateId', authenticateAdmin,
 
         const toDelete = [];
 
-        // ColectÄƒm toate URL-urile de fiÈ™iere
+        // Colectam toate URL-urile de fiÈ™iere
         if (doc.heroBgImage)       toDelete.push(doc.heroBgImage);
         if (doc.heroBgImageMobile) toDelete.push(doc.heroBgImageMobile);
         if (doc.themeImages) {
@@ -5487,10 +5998,10 @@ async function seedServices() {
     const count = await Service.countDocuments();
     if (count > 0) return;
     const defaults = [
-        { name: 'Sweet Dreams Candy Bar', category: 'candybar', description: 'Candy bar de lux cu dulciuri artizanale, decoruri personalizate È™i setup complet pentru evenimentul tÄƒu. Include masÄƒ decoratÄƒ, recipiente de sticlÄƒ, etichetare È™i livrare.', priceFrom: 1200, priceTo: 3500, priceUnit: 'total', location: 'BucureÈ™ti', phone: '0721 000 001', instagram: '@sweetdreams.ro', imageUrl: 'https://images.unsplash.com/photo-1558636508-e0db3814bd1d?w=600&q=80', rating: 4.9, reviewCount: 84, tags: ['lux','personalizat','livrare'], featured: true, available: true },
+        { name: 'Sweet Dreams Candy Bar', category: 'candybar', description: 'Candy bar de lux cu dulciuri artizanale, decoruri personalizate sisetup complet pentru evenimentul tau. Include masa decorata, recipiente de sticla, etichetare silivrare.', priceFrom: 1200, priceTo: 3500, priceUnit: 'total', location: 'BucureÈ™ti', phone: '0721 000 001', instagram: '@sweetdreams.ro', imageUrl: 'https://images.unsplash.com/photo-1558636508-e0db3814bd1d?w=600&q=80', rating: 4.9, reviewCount: 84, tags: ['lux','personalizat','livrare'], featured: true, available: true },
         { name: 'Formația Romantica', category: 'formatie', description: 'Formație completă cu 6 muzicieni, repertoriu variat: muzică populară, manele, internațional. Experiență de peste 15 ani în nunți și evenimente.', priceFrom: 3500, priceTo: 6000, priceUnit: 'total', location: 'București & împrejurimi', phone: '0745 000 002', imageUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600&q=80', rating: 4.8, reviewCount: 127, tags: ['populară','manele','internațional'], featured: true, available: true },
-        { name: 'DJ Alex Pro', category: 'dj', description: 'DJ profesionist cu echipament premium, lumini È™i sistem de sunet. Playlist personalizat, mixing live, experienÈ›Äƒ la peste 300 de nunÈ›i.', priceFrom: 1500, priceTo: 2500, priceUnit: 'total', location: 'Nationwide', phone: '0733 000 003', instagram: '@djAlexPro', imageUrl: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=600&q=80', rating: 4.7, reviewCount: 203, tags: ['lumini','mixing live','nationwide'], featured: false, available: true },
-        { name: 'Atelier Floral Irina', category: 'florarie', description: 'Aranjamente florale pentru nunÈ›i: buchete mireasÄƒ, centrepiece-uri, arcuri florale, decoruri salÄƒ. Flori proaspete din import È™i locale.', priceFrom: 2000, priceUnit: 'total', location: 'Cluj-Napoca', phone: '0756 000 004', website: 'www.atelierfloral.ro', imageUrl: 'https://images.unsplash.com/photo-1487530811015-780de7c30f3a?w=600&q=80', rating: 5.0, reviewCount: 56, tags: ['buchete','aranjamente','arcuri'], featured: true, available: true },
+        { name: 'DJ Alex Pro', category: 'dj', description: 'DJ profesionist cu echipament premium, lumini sisistem de sunet. Playlist personalizat, mixing live, experienta la peste 300 de nunti.', priceFrom: 1500, priceTo: 2500, priceUnit: 'total', location: 'Nationwide', phone: '0733 000 003', instagram: '@djAlexPro', imageUrl: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=600&q=80', rating: 4.7, reviewCount: 203, tags: ['lumini','mixing live','nationwide'], featured: false, available: true },
+        { name: 'Atelier Floral Irina', category: 'florarie', description: 'Aranjamente florale pentru nunti: buchete mireasa, centrepiece-uri, arcuri florale, decoruri sala. Flori proaspete din import silocale.', priceFrom: 2000, priceUnit: 'total', location: 'Cluj-Napoca', phone: '0756 000 004', website: 'www.atelierfloral.ro', imageUrl: 'https://images.unsplash.com/photo-1487530811015-780de7c30f3a?w=600&q=80', rating: 5.0, reviewCount: 56, tags: ['buchete','aranjamente','arcuri'], featured: true, available: true },
         { name: 'Studio Lumina Foto', category: 'foto-video', description: 'Pachet complet foto + video pentru nuntă: 2 fotografi, 2 cameramani, album premium, clip cinematic 4K, drone, livrare în 60 zile.', priceFrom: 4500, priceTo: 8000, priceUnit: 'total', location: 'București', phone: '0766 000 005', website: 'www.studiolumina.ro', imageUrl: 'https://images.unsplash.com/photo-1606216794079-73f9c1f1a108?w=600&q=80', rating: 4.9, reviewCount: 91, tags: ['4K','drone','album premium'], featured: true, available: true },
         { name: 'Tort de Vis Cofetărie', category: 'cofetarie', description: 'Torturi de nuntă personalizate, desert table, cupcakes și prăjituri. Design unic creat împreună cu voi. Livrare și montaj inclus.', priceFrom: 800, priceTo: 3000, priceUnit: 'total', location: 'Iași', phone: '0722 000 006', imageUrl: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=600&q=80', rating: 4.8, reviewCount: 142, tags: ['personalizat','livrare','desert table'], featured: false, available: true },
     ];
@@ -5573,7 +6084,9 @@ app.post('/api/upgrade', authenticateToken, async (req, res) => {
     if (requestedPlan === 'free') {
       return res.status(400).send({ error: "Planul ales este invalid." });
     }
-    const currentPlan = normalizePlan(user.plan || 'free');
+    const currentPlan = accountRequiresPayment(user)
+      ? 'free'
+      : normalizePlan(user.plan || 'free');
 
     const checkoutAddress = getCheckoutContactAndAddress({
       billing,
@@ -5794,7 +6307,7 @@ app.post('/api/upgrade', authenticateToken, async (req, res) => {
     res.json({ url: session.url });
   } catch (error) {
     console.error(error);
-    res.status(500).send({ error: 'Nu am putut iniÈ›ia plata securizatÄƒ.' });
+    res.status(500).send({ error: 'Nu am putut initia plata securizata.' });
   }
 });
 
@@ -5941,7 +6454,7 @@ app.post('/api/guest/public-rsvp', async (req, res) => {
     const limits = config.limits[owner.plan || 'free'];
     const currentCount = await Guest.countDocuments({ ownerId });
     
-    if (currentCount >= limits.maxGuests) return res.status(403).send({ error: 'Limita atinsÄƒ.' });
+    if (currentCount >= limits.maxGuests) return res.status(403).send({ error: 'Limita atinsa.' });
     
     const nextStatus = String(status || '').toLowerCase() === 'declined' ? 'declined' : 'confirmed';
 
@@ -6113,7 +6626,9 @@ app.post('/api/netopia/initiate', authenticateToken, async (req, res) => {
         if (requestedPlan === 'free') {
           return res.status(400).json({ error: 'Planul ales este invalid.' });
         }
-        const currentPlan = normalizePlan(user.plan || 'free');
+        const currentPlan = accountRequiresPayment(user)
+          ? 'free'
+          : normalizePlan(user.plan || 'free');
 
         const config    = await getConfig();
         const planPriceMap = {
@@ -6426,6 +6941,7 @@ async function finalizeNetopiaPaymentAsPaid(orderId) {
     {
       $set: {
         plan: planAtLeast(user.plan || 'free', targetPlan),
+        requiresPayment: false,
         'profile.billingVatCode': billing.vatCode,
         'payments.$.status': 'Paid',
         'payments.$.invoiceNumber': invoiceNum,
@@ -6516,13 +7032,13 @@ app.post('/api/netopia/confirm', async (req, res) => {
           throw new Error('Netopia private key not found. Set NETOPIA_PRIVATE_KEY_PATH or place key in project root.');
         }
 
-        // 2. DecriptÄƒm cheia AES cu RSA (node-forge evitÄƒ restricÈ›ia din OpenSSL 3)
+        // 2. Decriptam cheia AES cu RSA (node-forge evita restrictia din OpenSSL 3)
         const privateKeyPem   = fs.readFileSync(keyPath, 'utf8');
         const forgePrivateKey = forge.pki.privateKeyFromPem(privateKeyPem);
         const aesKeyBinary    = forgePrivateKey.decrypt(forge.util.decode64(env_key), 'RSAES-PKCS1-V1_5');
         const aesKey          = Buffer.from(aesKeyBinary, 'binary');
 
-        // 3. DecriptÄƒm payload-ul cu AES-256-CBC
+        // 3. Decriptam payload-ul cu AES-256-CBC
         const ivBuf    = iv ? Buffer.from(iv, 'base64') : Buffer.alloc(16, 0);
         const decipher = crypto.createDecipheriv(cipher || 'aes-256-cbc', aesKey, ivBuf);
         const xmlStr   = Buffer.concat([
@@ -6531,7 +7047,7 @@ app.post('/api/netopia/confirm', async (req, res) => {
         ]).toString('utf8');
         console.log('Netopia IPN XML decriptat:', xmlStr);
 
-        // 4. ParsÄƒm XML-ul
+        // 4. Parsam XML-ul
         const parser  = new Parser({ explicitArray: false });
         const parsed  = await parser.parseStringPromise(xmlStr);
         const order   = parsed?.order;
@@ -6544,14 +7060,14 @@ app.post('/api/netopia/confirm', async (req, res) => {
         console.log(`Netopia IPN: orderId=${orderId} | action=${action} | errorCode=${errorCode}`);
 
         if (!orderId) {
-            console.warn('Netopia IPN: orderId lipseÈ™te din XML decriptat');
+            console.warn('Netopia IPN: orderId lipseste din XML decriptat');
             return res.send(crcOk);
         }
 
         if (errorCode === '0') {
             // Plată aprobată — la fel ca Stripe checkout.session.completed
             const result = await finalizeNetopiaPaymentAsPaid(orderId);
-            console.log(`Netopia IPN: user gÄƒsit pentru orderId=${orderId}:`, !!result?.user);
+            console.log(`Netopia IPN: user gasit pentru orderId=${orderId}:`, !!result?.user);
 
             if (result?.user) {
                 console.log(`✅ Netopia IPN: user ${result.user._id} → plan=${result.updated?.plan} | factură=${result.invoiceNum} | email=${result.emailSent ? 'sent' : 'skip'} (order ${orderId})`);
@@ -6575,12 +7091,12 @@ app.post('/api/netopia/confirm', async (req, res) => {
 });
 
 // TEST MANUAL — apelează din browser: GET /api/netopia/test-upgrade/:userId
-// È˜terge dupÄƒ ce testezi!
+// È˜terge dupa ce testezi!
 app.get('/api/netopia/test-upgrade/:userId', async (req, res) => {
     try {
         const result = await User.findByIdAndUpdate(
             req.params.userId,
-            { plan: 'premium' },
+            { plan: 'premium', requiresPayment: false },
             { new: true }
         );
         res.json({ ok: true, plan: result?.plan });
@@ -6645,7 +7161,7 @@ app.get('/invoice/:invoiceNumber', async (req, res) => {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FacturÄƒ ${invoiceNumber}</title>
+<title>Factura ${invoiceNumber}</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Segoe UI', Arial, sans-serif; background: #f4f6f9; color: #222; }
@@ -6697,7 +7213,7 @@ app.get('/invoice/:invoiceNumber', async (req, res) => {
       <div class="brand-sub">contact@weddingplanner.ro</div>
     </div>
     <div class="invoice-meta">
-      <div class="invoice-title">FacturÄƒ</div>
+      <div class="invoice-title">Factura</div>
       <div class="invoice-num">${invoiceNumber}</div>
       <div><span class="badge">ACHITAT</span></div>
     </div>
@@ -6706,7 +7222,7 @@ app.get('/invoice/:invoiceNumber', async (req, res) => {
   <div class="body">
     <div class="info-row">
       <div class="info-block">
-        <label>Facturat cÄƒtre</label>
+        <label>Facturat catre</label>
         <div class="val">${clientName}</div>
         <div class="sub">${p.billingEmail || ''}</div>
         ${p.billingAddress ? `<div class="sub">${p.billingAddress}</div>` : ''}
@@ -6716,10 +7232,10 @@ app.get('/invoice/:invoiceNumber', async (req, res) => {
         <div class="sub">Tara: ${invoiceCountry || '-'}</div>
       </div>
       <div class="info-block">
-        <label>Detalii facturÄƒ</label>
+        <label>Detalii factura</label>
         <div class="val">${invoiceNumber}</div>
         <div class="sub">Data: ${date}</div>
-        <div class="sub">MetodÄƒ: ${p.billingFirstName ? 'Netopia / Card Bancar' : 'Card (Stripe)'}</div>
+        <div class="sub">Metoda: ${p.billingFirstName ? 'Netopia / Card Bancar' : 'Card (Stripe)'}</div>
       </div>
     </div>
 
@@ -6728,7 +7244,7 @@ app.get('/invoice/:invoiceNumber', async (req, res) => {
         <tr>
           <th>Descriere</th>
           <th style="text-align:center">Cantitate</th>
-          <th style="text-align:right">PreÈ› unitar</th>
+          <th style="text-align:right">Pret unitar</th>
           <th>Total</th>
         </tr>
       </thead>
@@ -6743,13 +7259,13 @@ app.get('/invoice/:invoiceNumber', async (req, res) => {
     </table>
 
     <div class="total-section">
-      <div class="total-label">Total de platÄƒ</div>
+      <div class="total-label">Total de plata</div>
       <div class="total-val">${amount}<span class="total-currency">RON</span></div>
     </div>
 
     <div class="meta-section">
-      <div class="meta-block"><label>ReferinÈ›Äƒ comandÄƒ</label><div class="val">${p.invoiceId || '-'}</div></div>
-      <div class="meta-block"><label>Status platÄƒ</label><div class="val" style="color:#10b981;font-weight:700">Achitat</div></div>
+      <div class="meta-block"><label>Referinta comanda</label><div class="val">${p.invoiceId || '-'}</div></div>
+      <div class="meta-block"><label>Status plata</label><div class="val" style="color:#10b981;font-weight:700">Achitat</div></div>
       <div class="meta-block"><label>Data emiterii</label><div class="val">${date}</div></div>
     </div>
   </div>

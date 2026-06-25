@@ -732,7 +732,44 @@ export function createEmailNotifications({
     const adults = Number(rsvpData?.adultsCount || 0);
     const children = Number(rsvpData?.childrenCount || 0);
     const total = Number(rsvpData?.confirmedCount || 0);
+    const vegetarianCount = Number(rsvpData?.vegetarianCount || 0);
+    const veganCount = Number(rsvpData?.veganCount || 0);
+    const allergies = String(rsvpData?.allergies || "").trim();
+    const participants = Array.isArray(rsvpData?.participants)
+      ? rsvpData.participants
+      : [];
+    const needsAccommodation = rsvpData?.needsAccommodation === true;
     const guestMessage = String(rsvpData?.message || "").trim();
+    const menuLabels = {
+      standard: "Meniu normal",
+      vegetarian: "Meniu vegetarian",
+      vegan: "Meniu vegan",
+      kids: "Meniu copil",
+      special: "Meniu special",
+    };
+    const participantDetailsHtml = participants.length
+      ? `<div style="margin-top:12px;padding:10px 12px;border:1px solid #e4e4e7;border-radius:12px;background:#ffffff">
+          <div style="font-size:12px;color:#71717a;margin-bottom:8px">Meniuri individuale</div>
+          ${participants
+            .map((participant) => {
+              const label = escapeHtml(participant?.label || "Persoana");
+              const menu = escapeHtml(
+                menuLabels[participant?.menuType] || "Meniu normal",
+              );
+              const participantAllergies = String(
+                participant?.allergies || "",
+              ).trim();
+              return `<div style="padding:7px 0;border-top:1px solid #f4f4f5;font-size:13px;color:#18181b">
+                <b>${label}</b>: ${menu}${
+                  participantAllergies
+                    ? ` <span style="color:#b45309">- Alergii: ${escapeHtml(participantAllergies)}</span>`
+                    : ""
+                }
+              </div>`;
+            })
+            .join("")}
+        </div>`
+      : "";
 
     const contentHtml = `
       <p style="margin:0 0 12px;font-size:14px;color:#3f3f46">
@@ -748,7 +785,16 @@ export function createEmailNotifications({
         { label: "Total persoane ", value: String(Number.isFinite(total) ? total : 0) },
         { label: "Adulti ", value: String(Number.isFinite(adults) ? adults : 0) },
         { label: "Copii ", value: String(Number.isFinite(children) ? children : 0) },
+        ...(normalizedStatus === "confirmed"
+          ? [
+              { label: "Meniuri vegetariene ", value: String(Number.isFinite(vegetarianCount) ? vegetarianCount : 0) },
+              { label: "Meniuri vegane ", value: String(Number.isFinite(veganCount) ? veganCount : 0) },
+              { label: "Alergii / intolerante ", value: participants.length ? "Detaliate pentru fiecare persoana" : allergies || "Nu au fost mentionate" },
+              { label: "Necesita cazare ", value: needsAccommodation ? "Da" : "Nu" },
+            ]
+          : []),
       ], rsvpTheme)}
+      ${normalizedStatus === "confirmed" ? participantDetailsHtml : ""}
       ${
         guestMessage
           ? `<div style="margin-top:12px;padding:10px 12px;border:1px solid #e4e4e7;border-radius:12px;background:#ffffff">
