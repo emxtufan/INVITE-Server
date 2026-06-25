@@ -4116,6 +4116,11 @@ app.get('/api/archived-event/:snapshotId', authenticateToken, async (req, res) =
 
 const UPLOADS_ROOT = path.join(__dirname, 'uploads');
 if (!fs.existsSync(UPLOADS_ROOT)) fs.mkdirSync(UPLOADS_ROOT, { recursive: true });
+const MAX_UPLOAD_SIZE_MB = Math.max(
+  1,
+  Number.parseInt(process.env.MAX_UPLOAD_SIZE_MB || '200', 10) || 200,
+);
+const MAX_UPLOAD_SIZE_BYTES = MAX_UPLOAD_SIZE_MB * 1024 * 1024;
 
 // Returnează path-ul directorului pentru un userId și îl creează dacă nu există
 function userUploadDir(userId) {
@@ -4144,15 +4149,22 @@ const storage = multer.diskStorage({
 
 const upload = multer({
     storage,
-    limits: { fileSize: 32 * 1024 * 1024 }, // 32 MB — audio files pot fi mai mari
+    limits: { fileSize: MAX_UPLOAD_SIZE_BYTES },
     fileFilter: (_req, file, cb) => {
         const allowed = [
             'image/jpeg','image/png','image/webp','image/gif','image/avif',
             'audio/mpeg','audio/mp3','audio/wav','audio/ogg','audio/aac',
-            'audio/x-m4a','audio/mp4','video/mp4',
+            'audio/x-m4a','audio/mp4',
+            'video/mp4','video/webm','video/quicktime',
         ];
         if (allowed.includes(file.mimetype)) cb(null, true);
-        else cb(new Error('Format neacceptat. Sunt permise imagini si fisiere audio.'));
+        else {
+          const unsupportedError = new Error(
+            'Format neacceptat. Foloseste JPG, PNG, WebP, GIF, MP4, WebM sau un fisier audio acceptat.',
+          );
+          unsupportedError.code = 'UNSUPPORTED_MEDIA_TYPE';
+          cb(unsupportedError);
+        }
     },
 });
 
@@ -4188,18 +4200,64 @@ app.use('/uploads', uploadsHeadersMiddleware, express.static(UPLOADS_ROOT, uploa
 app.use('/api/uploads', uploadsHeadersMiddleware, express.static(UPLOADS_ROOT, uploadsStaticOptions));
 
 
-// POST /api/upload — un singur fișier, returnează { url, size }
-app.post('/api/upload', authenticateToken, upload.single('file'), (req, res) => {
+// POST /api/upload - un singur fisier, returneaza { url, size }
+app.post('/api/upload', authenticateToken, (req, res) => {
+  upload.single('file')(req, res, (error) => {
+    if (error) {
+      console.error('[UPLOAD] Failed:', {
+        code: error.code,
+        message: error.message,
+        userId: req.user?.userId,
+      });
+
+      if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({
+          error: `Fisierul depaseste limita de ${MAX_UPLOAD_SIZE_MB} MB. Pentru animatii mari, converteste GIF-ul in WebM.`,
+          code: 'FILE_TOO_LARGE',
+          maxSizeMb: MAX_UPLOAD_SIZE_MB,
+        });
+      }
+
+      if (error.code === 'UNSUPPORTED_MEDIA_TYPE') {
+        return res.status(415).json({
+          error: error.message,
+          code: 'UNSUPPORTED_MEDIA_TYPE',
+        });
+      }
+
+      if (error.code === 'EACCES' || error.code === 'EPERM' || error.code === 'EROFS') {
+        return res.status(500).json({
+          error: 'Serverul nu poate salva fisierul. Verifica permisiunile folderului uploads.',
+          code: 'UPLOAD_STORAGE_UNAVAILABLE',
+        });
+      }
+
+      return res.status(500).json({
+        error: 'Uploadul a esuat pe server.',
+        code: 'UPLOAD_FAILED',
+      });
+    }
+
     try {
-        if (!req.file) return res.status(400).json({ error: 'Niciun fiÈ™ier primit.' });
+        if (!req.file) {
+          return res.status(400).json({
+            error: 'Niciun fisier primit.',
+            code: 'FILE_MISSING',
+          });
+        }
         const uid   = String(req.user.userId);
         const shard = uid.slice(-4, -2) || 'xx';
         const shard2= uid.slice(-2) || 'xx';
         const url   = `/uploads/${shard}/${shard2}/${uid}/${req.file.filename}`;
         res.json({ url, size: req.file.size });
     } catch (e) {
-        res.status(500).json({ error: e.message });
+        console.error('[UPLOAD] Response failed:', e);
+        res.status(500).json({
+          error: 'Fisierul a fost primit, dar raspunsul uploadului a esuat.',
+          code: 'UPLOAD_RESPONSE_FAILED',
+        });
     }
+  });
 });
 
 // POST /api/download-yt-audio — descarcă audio de pe YouTube cu @ybd-project/ytdl-core
