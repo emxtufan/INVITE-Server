@@ -297,6 +297,10 @@ const LandingProcessStepSchema = new mongoose.Schema({
     description: { type: String, default: '' },
     videoSrc: { type: String, required: true },
     posterSrc: { type: String, default: '' },
+    mediaMode: {
+        type: String,
+        enum: ['loop', 'popup'],
+    },
     background: { type: String, default: '#edf7fb' },
     points: { type: [String], default: [] },
 }, { _id: false });
@@ -5614,13 +5618,19 @@ const normalizeLandingProcessConfig = (value) => {
         introDescription: String(source.introDescription || '').trim().slice(0, 600),
         title: String(source.title || '').trim().slice(0, 240),
         ctaLabel: String(source.ctaLabel || '').trim().slice(0, 120),
-        steps: rawSteps.map((step) => ({
+        steps: rawSteps.map((step, index) => ({
             id: String(step?.id || '').trim().slice(0, 120),
             label: String(step?.label || '').trim().slice(0, 160),
             title: String(step?.title || '').trim().slice(0, 240),
             description: String(step?.description || '').trim().slice(0, 800),
             videoSrc: String(step?.videoSrc || '').trim().slice(0, 2000),
             posterSrc: String(step?.posterSrc || '').trim().slice(0, 2000),
+            mediaMode:
+                step?.mediaMode === 'loop' || step?.mediaMode === 'popup'
+                    ? step.mediaMode
+                    : index === 0
+                        ? 'loop'
+                        : 'popup',
             background: String(step?.background || '#edf7fb').trim().slice(0, 40),
             points: Array.isArray(step?.points)
                 ? step.points
